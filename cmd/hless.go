@@ -101,6 +101,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	w := m.pagerWidth
+	h := m.pagerHeight
 
 	log.Println("Got request", msg)
 
@@ -130,6 +131,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if k == "down" || k == "j" {
+			m.populate(m.cursorLine + h)
+
 			if m.cursorLine < len(m.lines) - 1 {
 				bottomLine, bottomSegment := m.bottomLine()
 				log.Printf("Scrolling down. Top line is %d(%d), cursor %d, bottom %d(%d)",
@@ -152,11 +155,41 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if k == "g" {
+			m.topLine = 0
+			m.topSegment = 0
+			m.cursorLine = 0
+		}
+
+		if k == "G" {
+			m.populate(2147483647)
+
+			m.cursorLine = len(m.lines) - 1
+			line := len(m.lines) - 1
+
+			var segs []string
+			for h > 0 {
+				segs = segmentize(m.lines[line], w)
+				if h > len(segs) {
+					h -= len(segs)
+					line--
+				} else {
+					break
+				}
+			}
+
+			m.topLine = line
+			m.topSegment = len(segs) - h
+		}
+
 	case tea.WindowSizeMsg:
 		if !m.ready {
 			m.pagerWidth = msg.Width
 			m.pagerHeight = msg.Height - 2
 			m.ready = true
+		} else {
+			m.pagerWidth = msg.Width
+			m.pagerHeight = msg.Height - 2
 		}
 	}
 
@@ -196,6 +229,7 @@ func (m *model) View() string {
 	h := m.pagerHeight
 	w := m.pagerWidth
 	res := ""
+	renderedLines := 0
 
 	currentLine := m.topLine
 	currentSegment := m.topSegment
@@ -228,12 +262,18 @@ func (m *model) View() string {
 			} else {
 				res = res + "\n" + seg
 			}
+			renderedLines++
 			desc = desc + fmt.Sprintf("%d(%d) ", currentLine, i)
 			h -= 1
 		}
 
 		currentLine += 1
 		currentSegment = 0
+	}
+
+	for renderedLines < m.pagerHeight {
+		res += fmt.Sprintf("%-*s\n", w, " ")
+		renderedLines++
 	}
 
 	if m.eof {
@@ -252,7 +292,7 @@ func (m *model) View() string {
 		res += "\n" + m.statusStyle.Render(st2)
 	}
 
-	log.Printf("Rendered: %s\n", desc)
+	log.Printf("Rendered: %s, %d lines\n", desc, renderedLines)
 
 	return res
 }
