@@ -71,16 +71,11 @@ func (m *model) bottomLine() (int, int) {
 	bottomSegment := 0
 	for h > 0 {
 		segs := segmentize(m.lines[bottomLine], w)
+		bottomSegment = min(len(segs[ts:]), ts+h) - 1
 		h -= len(segs[ts:])
 		ts = 0
 		if h > 0 {
-			if bottomLine == len(m.lines) - 1 {
-				bottomSegment = len(segs[ts:])
-				break
-			}
-			bottomLine += 1
-		} else {
-			bottomSegment = -h - 1
+			bottomLine++
 		}
 	}
 	return bottomLine, bottomSegment
