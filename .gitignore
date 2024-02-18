@@ -2,4 +2,4 @@ logs/
 .vscode/
 hless
 hless-x86_64
-debug.log
+hless.log
