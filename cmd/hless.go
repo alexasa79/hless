@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -25,9 +24,11 @@ type model struct {
 
 	cursorLine int
 
-	cursorStyle lipgloss.Style
+	pagerWidth int
+	pagerHeight int
 
-	viewport viewport.Model
+	cursorStyle lipgloss.Style
+	statusStyle lipgloss.Style
 }
 
 func initialModel(f *os.File) *model {
@@ -47,6 +48,10 @@ func initialModel(f *os.File) *model {
 			NewStyle().
 			Foreground(lipgloss.Color("#000")).
 			Background(lipgloss.Color("#ffda45")),
+		statusStyle: lipgloss.
+			NewStyle().
+			Foreground(lipgloss.Color("#000")).
+			Background(lipgloss.Color("#fff")),
 	}
 }
 
@@ -64,8 +69,8 @@ func (m *model) Init() tea.Cmd {
 
 /// Return lowest visible line and lowest visible segment in the line.
 func (m *model) bottomLine() (int, int) {
-	w := m.viewport.Width
-	h := m.viewport.Height
+	w := m.pagerWidth
+	h := m.pagerHeight
 	ts := m.topSegment
 	bottomLine := m.topLine
 	bottomSegment := 0
@@ -83,7 +88,7 @@ func (m *model) bottomLine() (int, int) {
 
 func (m *model) scrollOneSegmentDown() {
 	m.topSegment += 1
-	segs := segmentize(m.lines[m.topLine], m.viewport.Width)
+	segs := segmentize(m.lines[m.topLine], m.pagerWidth)
 	if m.topSegment >= len(segs) {
 		if m.topLine < len(m.lines) - 1 {
 			m.topLine += 1
@@ -95,7 +100,7 @@ func (m *model) scrollOneSegmentDown() {
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
-	w := m.viewport.Width
+	w := m.pagerWidth
 
 	log.Println("Got request", msg)
 
@@ -149,15 +154,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		if !m.ready {
-			m.viewport = viewport.New(msg.Width, msg.Height)
+			m.pagerWidth = msg.Width
+			m.pagerHeight = msg.Height - 2
 			m.ready = true
-		} else {
-			m.viewport.Width = msg.Width
-			m.viewport.Height = msg.Height
 		}
 	}
-
-	m.viewport, cmd = m.viewport.Update(msg)
 
 	return m, cmd
 }
@@ -192,8 +193,8 @@ func segmentize(line string, w int) []string {
 }
 
 func (m *model) View() string {
-	h := m.viewport.Height
-	w := m.viewport.Width
+	h := m.pagerHeight
+	w := m.pagerWidth
 	res := ""
 
 	currentLine := m.topLine
@@ -233,6 +234,22 @@ func (m *model) View() string {
 
 		currentLine += 1
 		currentSegment = 0
+	}
+
+	if m.eof {
+		st1 := fmt.Sprintf("L: %d/%d", m.cursorLine, len(m.lines))
+		st1 = fmt.Sprintf("%-*s", w, st1)
+		res += "\n" + m.statusStyle.Render(st1)
+
+		st2 := fmt.Sprintf("%-*s", w, "")
+		res += "\n" + m.statusStyle.Render(st2)
+	} else {
+		st1 := fmt.Sprintf("L: %d/∞", m.cursorLine)
+		st1 = fmt.Sprintf("%-*s", w, st1)
+		res += "\n" + m.statusStyle.Render(st1)
+
+		st2 := fmt.Sprintf("%-*s", w, "")
+		res += "\n" + m.statusStyle.Render(st2)
 	}
 
 	log.Printf("Rendered: %s\n", desc)
