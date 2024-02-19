@@ -2,11 +2,9 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"log"
-	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -24,9 +22,7 @@ type Model struct {
 	lines []string
 	eof bool
 
-	topLine int
-	topSegment int
-
+	top Position
 	cursorLine int
 
 	pagerWidth int
@@ -36,7 +32,7 @@ type Model struct {
 	statusStyle lipgloss.Style
 }
 
-func InitialModel(f io.Reader) *Model {
+func initialModel(f io.Reader) *Model {
 	return &Model {
 		ready: false,
 
@@ -45,8 +41,7 @@ func InitialModel(f io.Reader) *Model {
 		lines: make([]string, 0),
 		eof: false,
 
-		topLine: 0,
-		topSegment: 0,
+		top: Position{ 0, 0 },
 		cursorLine: 0,
 
 		cursorStyle: lipgloss.
@@ -126,7 +121,7 @@ func (m *Model) Init() tea.Cmd {
 
 /// Return lowest visible line and lowest visible segment in the line.
 func (m *Model) BottomLine() (int, int) {
-	pos := Position { m.topLine, m.topSegment }
+	pos := Position { m.top.Line, m.top.Segment }
 	for h := 0; m.HasNext(pos) && h < m.pagerHeight - 1; h++ {
 		pos = m.Next(pos)
 	}
@@ -134,28 +129,28 @@ func (m *Model) BottomLine() (int, int) {
 }
 
 func (m *Model) ScrollOneSegmentDown() {
-	m.topSegment += 1
-	segs := m.Segmentize(m.lines[m.topLine])
-	if m.topSegment >= len(segs) {
-		if m.topLine < len(m.lines) - 1 {
-			m.topLine += 1
-			m.topSegment = 0
+	m.top.Segment += 1
+	segs := m.Segmentize(m.lines[m.top.Line])
+	if m.top.Segment >= len(segs) {
+		if m.top.Line < len(m.lines) - 1 {
+			m.top.Line += 1
+			m.top.Segment = 0
 		}
 	}
 }
 
 func (m *Model) OnKeyUp() {
-	if m.cursorLine != m.topLine {
+	if m.cursorLine != m.top.Line {
 		m.cursorLine -= 1
 	} else {
-		if m.topSegment > 0 {
-			m.topSegment -= 1
+		if m.top.Segment > 0 {
+			m.top.Segment -= 1
 		} else {
-			if m.topLine > 0 {
-				m.topLine -= 1
-				segs := m.Segmentize(m.lines[m.topLine])
-				m.topSegment = len(segs) - 1
-				m.cursorLine = m.topLine
+			if m.top.Line > 0 {
+				m.top.Line -= 1
+				segs := m.Segmentize(m.lines[m.top.Line])
+				m.top.Segment = len(segs) - 1
+				m.cursorLine = m.top.Line
 			}
 		}
 	}
@@ -168,8 +163,8 @@ func (m *Model) OnKeyDown() {
 
 	if m.cursorLine < len(m.lines) - 1 {
 		bottomLine, bottomSegment := m.BottomLine()
-		log.Printf("Scrolling down. Top line is %d(%d), cursor %d, bottom %d(%d)",
-			m.topLine, m.topSegment, m.cursorLine, bottomLine, bottomSegment)
+		log.Printf("Scrolling down. Top line is %v, cursor %d, bottom %d(%d)",
+			m.top, m.cursorLine, bottomLine, bottomSegment)
 		if m.cursorLine == bottomLine {
 			m.ScrollOneSegmentDown()
 			bottomLine, bottomSegment = m.BottomLine()
@@ -208,8 +203,8 @@ func (m *Model) OnDocumentEnd() {
 		}
 	}
 
-	m.topLine = line
-	m.topSegment = len(segs) - h
+	m.top.Line = line
+	m.top.Segment = len(segs) - h
 }
 
 func (m *Model) OnPageDown() {
@@ -234,13 +229,13 @@ func (m *Model) NormalizeView() {
 		return
 	}
 
-	m.populate(m.topLine + m.pagerHeight)
+	m.populate(m.top.Line + m.pagerHeight)
 
-	if m.topLine > m.cursorLine {
-		log.Printf("Cursor %d appears to be before top line %d", m.cursorLine, m.topLine)
-		m.topLine = m.cursorLine
-		m.topSegment = 0
-		log.Printf("Fixed top line to %d(%d)", m.topLine, m.topSegment)
+	if m.top.Line > m.cursorLine {
+		log.Printf("Cursor %d appears to be before top line %d", m.cursorLine, m.top.Line)
+		m.top.Line = m.cursorLine
+		m.top.Segment = 0
+		log.Printf("Fixed top line to %v", m.top)
 		return
 	}
 
@@ -251,9 +246,8 @@ func (m *Model) NormalizeView() {
 		for h := m.pagerHeight; m.HasPrev(pos) && h > 1; h-- {
 			pos = m.Prev(pos)
 		}
-		m.topLine = pos.Line
-		m.topSegment = pos.Segment
-		log.Printf("Fixed top line to %d(%d)", m.topLine, m.topSegment)
+		m.top = pos
+		log.Printf("Fixed top line to %v", m.top)
 	}
 }
 
@@ -279,8 +273,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if k == "g" {
-			m.topLine = 0
-			m.topSegment = 0
+			m.top = Position{ 0, 0 }
 			m.cursorLine = 0
 		}
 
@@ -343,29 +336,28 @@ func (m *Model) View() string {
 	res := ""
 	renderedLines := 0
 
-	currentLine := m.topLine
-	currentSegment := m.topSegment
+	current := m.top
 	desc := ""
 
-	log.Printf("Rendering the view from line %d(%d), cursor %d, dimensions %dx%d\n",
-		currentLine, currentSegment, m.cursorLine, w, h)
+	log.Printf("Rendering the view from line %v, cursor %d, dimensions %dx%d\n",
+		current, m.cursorLine, w, h)
 
-	m.populate(currentLine + h)
+	m.populate(current.Line + h)
 
 	for h > 0 {
-		if currentLine >= len(m.lines) {
+		if current.Line >= len(m.lines) {
 			break
 		}
 
-		line := m.lines[currentLine]
+		line := m.lines[current.Line]
 		segs := m.Segmentize(line)
 
-		for i, seg := range segs[currentSegment:] {
+		for i, seg := range segs[current.Segment:] {
 			if (h == 0) {
 				break
 			}
 
-			if currentLine == m.cursorLine {
+			if current.Line == m.cursorLine {
 				seg = m.cursorStyle.Render(seg)
 				desc = desc + "*"
 			}
@@ -375,12 +367,12 @@ func (m *Model) View() string {
 				res = res + "\n" + seg
 			}
 			renderedLines++
-			desc = desc + fmt.Sprintf("%d(%d) ", currentLine, i)
+			desc = desc + fmt.Sprintf("%d(%d) ", current.Line, i)
 			h -= 1
 		}
 
-		currentLine += 1
-		currentSegment = 0
+		current.Line += 1
+		current.Segment = 0
 	}
 
 	for renderedLines < m.pagerHeight {
@@ -407,40 +399,4 @@ func (m *Model) View() string {
 	log.Printf("Rendered: %s, %d lines\n", desc, renderedLines)
 
 	return res
-}
-
-func parseArguments() (*string, error) {
-	if (len(os.Args) != 2) {
-		return nil, errors.New("missing input file")
-	}
-	return &os.Args[1], nil
-}
-
-func main() {
-	file, err := parseArguments()
-	if err != nil {
-		fmt.Println("Error parsing arguments:", err)
-		os.Exit(1)
-	}
-	in, err := os.Open(*file)
-	if err != nil {
-		fmt.Println("Error opening input file:", err)
-		os.Exit(1)
-	}
-	defer in.Close()
-
-	f, err := tea.LogToFile("hless.log", "")
-	if err != nil {
-		fmt.Println("Error opening debug log:", err)
-		os.Exit(1)
-	}
-	defer f.Close()
-
-	log.Println("-----------------------------------------------------------")
-
-    p := tea.NewProgram(InitialModel(in), tea.WithAltScreen())
-    if _, err := p.Run(); err != nil {
-        fmt.Printf("Error rendering the TUI: %v", err)
-        os.Exit(1)
-    }
 }

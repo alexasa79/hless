@@ -1,7 +1,10 @@
 hless:
-	go build cmd/hless.go
+	go build .
 
 hless-x86_64:
-	env GOOS=linux GOARCH=x86_64 go build cmd/hless.go
+	env GOOS=linux GOARCH=x86_64 go build .
+
+clean:
+	go clean
 
 .PHONY: hless hless-x86_64
