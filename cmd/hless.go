@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -11,10 +12,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type model struct {
+type Position struct {
+	Line int
+	Segment int
+}
+type Model struct {
 	ready bool
 
-	file *os.File
+	file io.Reader
 	input chan string
 	lines []string
 	eof bool
@@ -31,8 +36,8 @@ type model struct {
 	statusStyle lipgloss.Style
 }
 
-func initialModel(f *os.File) *model {
-	return &model {
+func InitialModel(f io.Reader) *Model {
+	return &Model {
 		ready: false,
 
 		file: f,
@@ -55,7 +60,59 @@ func initialModel(f *os.File) *model {
 	}
 }
 
-func (m *model) Init() tea.Cmd {
+func (m *Model) HasNext(pos Position) bool {
+	m.populate(pos.Line)
+	segs := m.Segmentize(m.lines[pos.Line])
+	if pos.Segment < len(segs) - 1 {
+		return true
+	}
+	if pos.Line < len(m.lines) - 1 {
+		return true
+	}
+	return false
+}
+
+func (m *Model) Next(pos Position) Position {
+	m.populate(pos.Line)
+	segs := m.Segmentize(m.lines[pos.Line])
+	if pos.Segment < len(segs) - 1 {
+		pos.Segment++
+		return pos
+	}
+
+	if pos.Line < len(m.lines) - 1 {
+		pos.Line++
+		pos.Segment = 0
+		return pos
+	}
+
+	panic("Attempt to move past the end of the buffer")
+}
+
+func (m *Model) HasPrev(pos Position) bool {
+	if pos.Line == 0 && pos.Segment == 0 {
+		return false
+	}
+	return true
+}
+
+func (m *Model) Prev(pos Position) Position {
+	if pos.Segment > 0 {
+		pos.Segment--
+		return pos
+	}
+
+	if pos.Line > 0 {
+		pos.Line--
+		segs := m.Segmentize(m.lines[pos.Line])
+		pos.Segment = len(segs) - 1
+		return pos
+	}
+
+	panic("Attempt to move before beginning of the buffer")
+}
+
+func (m *Model) Init() tea.Cmd {
     go func() {
         scanner := bufio.NewScanner(m.file)
         for scanner.Scan() {
@@ -68,27 +125,17 @@ func (m *model) Init() tea.Cmd {
 }
 
 /// Return lowest visible line and lowest visible segment in the line.
-func (m *model) bottomLine() (int, int) {
-	w := m.pagerWidth
-	h := m.pagerHeight
-	ts := m.topSegment
-	bottomLine := m.topLine
-	bottomSegment := 0
-	for h > 0 {
-		segs := segmentize(m.lines[bottomLine], w)
-		bottomSegment = min(len(segs[ts:]), ts+h) - 1
-		h -= len(segs[ts:])
-		ts = 0
-		if h > 0 {
-			bottomLine++
-		}
+func (m *Model) BottomLine() (int, int) {
+	pos := Position { m.topLine, m.topSegment }
+	for h := 0; m.HasNext(pos) && h < m.pagerHeight - 1; h++ {
+		pos = m.Next(pos)
 	}
-	return bottomLine, bottomSegment
+	return pos.Line, pos.Segment
 }
 
-func (m *model) scrollOneSegmentDown() {
+func (m *Model) ScrollOneSegmentDown() {
 	m.topSegment += 1
-	segs := segmentize(m.lines[m.topLine], m.pagerWidth)
+	segs := m.Segmentize(m.lines[m.topLine])
 	if m.topSegment >= len(segs) {
 		if m.topLine < len(m.lines) - 1 {
 			m.topLine += 1
@@ -97,11 +144,121 @@ func (m *model) scrollOneSegmentDown() {
 	}
 }
 
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+func (m *Model) OnKeyUp() {
+	if m.cursorLine != m.topLine {
+		m.cursorLine -= 1
+	} else {
+		if m.topSegment > 0 {
+			m.topSegment -= 1
+		} else {
+			if m.topLine > 0 {
+				m.topLine -= 1
+				segs := m.Segmentize(m.lines[m.topLine])
+				m.topSegment = len(segs) - 1
+				m.cursorLine = m.topLine
+			}
+		}
+	}
+}
 
-	w := m.pagerWidth
+func (m *Model) OnKeyDown() {
 	h := m.pagerHeight
+
+	m.populate(m.cursorLine + h)
+
+	if m.cursorLine < len(m.lines) - 1 {
+		bottomLine, bottomSegment := m.BottomLine()
+		log.Printf("Scrolling down. Top line is %d(%d), cursor %d, bottom %d(%d)",
+			m.topLine, m.topSegment, m.cursorLine, bottomLine, bottomSegment)
+		if m.cursorLine == bottomLine {
+			m.ScrollOneSegmentDown()
+			bottomLine, bottomSegment = m.BottomLine()
+			log.Printf("New bottom %d(%d)\n", bottomLine, bottomSegment)
+			if m.cursorLine < bottomLine {
+				m.cursorLine += 1
+			}
+		} else {
+			m.cursorLine += 1
+		}
+	} else {
+		bottomLine, bottomSegment := m.BottomLine()
+		segs := m.Segmentize(m.lines[bottomLine])
+		if (bottomSegment < len(segs) - 1) {
+			m.ScrollOneSegmentDown()
+		}
+	}
+}
+
+func (m *Model) OnDocumentEnd() {
+	h := m.pagerHeight
+
+	m.populate(2147483647)
+
+	m.cursorLine = len(m.lines) - 1
+	line := len(m.lines) - 1
+
+	var segs []string
+	for {
+		segs = m.Segmentize(m.lines[line])
+		if h > len(segs) {
+			h -= len(segs)
+			line--
+		} else {
+			break
+		}
+	}
+
+	m.topLine = line
+	m.topSegment = len(segs) - h
+}
+
+func (m *Model) OnPageDown() {
+	h := m.pagerHeight - 2
+	for h > 0 {
+		segs := m.Segmentize(m.lines[m.cursorLine])
+		h -= len(segs)
+		if m.cursorLine >= len(m.lines) - 1 {
+			break
+		}
+		m.cursorLine++
+	}
+
+	m.NormalizeView()
+}
+
+/// Given current position of the cursor, make sure it is visible.
+/// This is needed in cases when change of terminal's size causes the cursor
+/// to become invisible (usually by being below bottom line).
+func (m *Model) NormalizeView() {
+	if !m.ready {
+		return
+	}
+
+	m.populate(m.topLine + m.pagerHeight)
+
+	if m.topLine > m.cursorLine {
+		log.Printf("Cursor %d appears to be before top line %d", m.cursorLine, m.topLine)
+		m.topLine = m.cursorLine
+		m.topSegment = 0
+		log.Printf("Fixed top line to %d(%d)", m.topLine, m.topSegment)
+		return
+	}
+
+	bottomLine, _ := m.BottomLine()
+	if m.cursorLine > bottomLine {
+		log.Printf("Cursor %d appears to be after bottom line %d", m.cursorLine, bottomLine)
+		pos := Position { m.cursorLine, len(m.Segmentize(m.lines[m.cursorLine])) - 1 }
+		for h := m.pagerHeight; m.HasPrev(pos) && h > 1; h-- {
+			pos = m.Prev(pos)
+		}
+		m.topLine = pos.Line
+		m.topSegment = pos.Segment
+		log.Printf("Fixed top line to %d(%d)", m.topLine, m.topSegment)
+	}
+}
+
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 
 	log.Println("Got request", msg)
 
@@ -114,45 +271,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if k == "up" || k == "k" {
-			if m.cursorLine != m.topLine {
-				m.cursorLine -= 1
-			} else {
-				if m.topSegment > 0 {
-					m.topSegment -= 1
-				} else {
-					if m.topLine > 0 {
-						m.topLine -= 1
-						segs := segmentize(m.lines[m.topLine], w)
-						m.topSegment = len(segs) - 1
-						m.cursorLine = m.topLine
-					}
-				}
-			}
+			m.OnKeyUp()
 		}
 
 		if k == "down" || k == "j" {
-			m.populate(m.cursorLine + h)
-
-			if m.cursorLine < len(m.lines) - 1 {
-				bottomLine, bottomSegment := m.bottomLine()
-				log.Printf("Scrolling down. Top line is %d(%d), cursor %d, bottom %d(%d)",
-					m.topLine, m.topSegment, m.cursorLine, bottomLine, bottomSegment)
-				if m.cursorLine == bottomLine {
-					m.scrollOneSegmentDown()
-					bottomLine, _ = m.bottomLine()
-					if m.cursorLine < bottomLine {
-						m.cursorLine += 1
-					}
-				} else {
-					m.cursorLine += 1
-				}
-			} else {
-				bottomLine, bottomSegment := m.bottomLine()
-				segs := segmentize(m.lines[bottomLine], w)
-				if (bottomSegment < len(segs) - 1) {
-					m.scrollOneSegmentDown()
-				}
-			}
+			m.OnKeyDown()
 		}
 
 		if k == "g" {
@@ -162,24 +285,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if k == "G" {
-			m.populate(2147483647)
+			m.OnDocumentEnd()
+		}
 
-			m.cursorLine = len(m.lines) - 1
-			line := len(m.lines) - 1
-
-			var segs []string
-			for h > 0 {
-				segs = segmentize(m.lines[line], w)
-				if h > len(segs) {
-					h -= len(segs)
-					line--
-				} else {
-					break
-				}
-			}
-
-			m.topLine = line
-			m.topSegment = len(segs) - h
+		if k == "pgdown" {
+			m.OnPageDown()
 		}
 
 	case tea.WindowSizeMsg:
@@ -193,10 +303,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	m.NormalizeView()
+
 	return m, cmd
 }
 
-func (m *model) populate(n int) {
+func (m *Model) populate(n int) {
 	if m.eof {
 		return
 	}
@@ -211,13 +323,13 @@ func (m *model) populate(n int) {
 	}
 }
 
-func segmentize(line string, w int) []string {
+func (m *Model)Segmentize(line string) []string {
 	res := make([]string, 0)
 	for line != "" {
-		l := min(w, len(line))
+		l := min(m.pagerWidth, len(line))
 		seg := line[:l]
-		if len(seg) < w {
-			seg = fmt.Sprintf("%-*s", w, seg)
+		if len(seg) < m.pagerWidth {
+			seg = fmt.Sprintf("%-*s", m.pagerWidth, seg)
 		}
 		res = append(res, seg)
 		line = line[l:]
@@ -225,7 +337,7 @@ func segmentize(line string, w int) []string {
 	return res
 }
 
-func (m *model) View() string {
+func (m *Model) View() string {
 	h := m.pagerHeight
 	w := m.pagerWidth
 	res := ""
@@ -246,7 +358,7 @@ func (m *model) View() string {
 		}
 
 		line := m.lines[currentLine]
-		segs := segmentize(line, w)
+		segs := m.Segmentize(line)
 
 		for i, seg := range segs[currentSegment:] {
 			if (h == 0) {
@@ -277,14 +389,14 @@ func (m *model) View() string {
 	}
 
 	if m.eof {
-		st1 := fmt.Sprintf("L: %d/%d", m.cursorLine, len(m.lines))
+		st1 := fmt.Sprintf("L: %d/%d", m.cursorLine + 1, len(m.lines))
 		st1 = fmt.Sprintf("%-*s", w, st1)
 		res += "\n" + m.statusStyle.Render(st1)
 
 		st2 := fmt.Sprintf("%-*s", w, "")
 		res += "\n" + m.statusStyle.Render(st2)
 	} else {
-		st1 := fmt.Sprintf("L: %d/∞", m.cursorLine)
+		st1 := fmt.Sprintf("L: %d/∞", m.cursorLine + 1)
 		st1 = fmt.Sprintf("%-*s", w, st1)
 		res += "\n" + m.statusStyle.Render(st1)
 
@@ -326,7 +438,7 @@ func main() {
 
 	log.Println("-----------------------------------------------------------")
 
-    p := tea.NewProgram(initialModel(in), tea.WithAltScreen())
+    p := tea.NewProgram(InitialModel(in), tea.WithAltScreen())
     if _, err := p.Run(); err != nil {
         fmt.Printf("Error rendering the TUI: %v", err)
         os.Exit(1)
