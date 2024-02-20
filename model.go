@@ -26,8 +26,8 @@ type Model struct {
 	top Position
 	cursorLine int
 
-	pagerWidth int
-	pagerHeight int
+	width int
+	height int
 
 	cursorStyle lipgloss.Style
 	statusStyle lipgloss.Style
@@ -57,7 +57,7 @@ func initialModel(f io.Reader) *Model {
 }
 
 func (m *Model) hasNext(pos Position) bool {
-	m.populate(pos.Line)
+	m.populate(pos.Line + 1)
 	segs := m.segmentize(m.lines[pos.Line])
 	if pos.Segment < len(segs) - 1 {
 		return true
@@ -69,7 +69,7 @@ func (m *Model) hasNext(pos Position) bool {
 }
 
 func (m *Model) next(pos Position) Position {
-	m.populate(pos.Line)
+	m.populate(pos.Line + 1)
 	segs := m.segmentize(m.lines[pos.Line])
 	if pos.Segment < len(segs) - 1 {
 		pos.Segment++
@@ -123,20 +123,15 @@ func (m *Model) Init() tea.Cmd {
 /// Return lowest visible line and lowest visible segment in the line.
 func (m *Model) bottomLine() (int, int) {
 	pos := Position { m.top.Line, m.top.Segment }
-	for h := 0; m.hasNext(pos) && h < m.pagerHeight - 1; h++ {
+	for h := 0; m.hasNext(pos) && h < m.height - 1; h++ {
 		pos = m.next(pos)
 	}
 	return pos.Line, pos.Segment
 }
 
 func (m *Model) scrollOneSegmentDown() {
-	m.top.Segment += 1
-	segs := m.segmentize(m.lines[m.top.Line])
-	if m.top.Segment >= len(segs) {
-		if m.top.Line < len(m.lines) - 1 {
-			m.top.Line += 1
-			m.top.Segment = 0
-		}
+	if m.hasNext(m.top) {
+		m.top = m.next(m.top)
 	}
 }
 
@@ -158,7 +153,7 @@ func (m *Model) onKeyUp() {
 }
 
 func (m *Model) onKeyDown() {
-	h := m.pagerHeight
+	h := m.height
 
 	m.populate(m.cursorLine + h)
 
@@ -186,9 +181,9 @@ func (m *Model) onKeyDown() {
 }
 
 func (m *Model) onDocumentEnd() {
-	h := m.pagerHeight
+	h := m.height
 
-	m.populate(2147483647)
+	m.populate(2147483647) // maximum value of int
 
 	m.cursorLine = len(m.lines) - 1
 	line := len(m.lines) - 1
@@ -208,18 +203,20 @@ func (m *Model) onDocumentEnd() {
 	m.top.Segment = len(segs) - h
 }
 
-func (m *Model) onPageDown() {
-	h := m.pagerHeight - 2
-	for h > 0 {
-		segs := m.segmentize(m.lines[m.cursorLine])
-		h -= len(segs)
-		if m.cursorLine >= len(m.lines) - 1 {
-			break
-		}
-		m.cursorLine++
+func (m *Model) onPageUp() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasPrev(it) && i < m.height - 1; i++ {
+		it = m.prev(it)
 	}
+	m.cursorLine = it.Line
+}
 
-	m.normalizeView()
+func (m *Model) onPageDown() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasNext(it) && i < m.height - 1; i++ {
+		it = m.next(it)
+	}
+	m.cursorLine = it.Line
 }
 
 /// Given current position of the cursor, make sure it is visible.
@@ -230,7 +227,7 @@ func (m *Model) normalizeView() {
 		return
 	}
 
-	m.populate(m.top.Line + m.pagerHeight)
+	m.populate(m.top.Line + m.height)
 
 	if m.top.Line > m.cursorLine {
 		log.Printf("Cursor %d appears to be before top line %d", m.cursorLine, m.top.Line)
@@ -244,7 +241,7 @@ func (m *Model) normalizeView() {
 	if m.cursorLine > bottomLine {
 		log.Printf("Cursor %d appears to be after bottom line %d", m.cursorLine, bottomLine)
 		pos := Position { m.cursorLine, len(m.segmentize(m.lines[m.cursorLine])) - 1 }
-		for h := m.pagerHeight; m.hasPrev(pos) && h > 1; h-- {
+		for h := m.height; m.hasPrev(pos) && h > 1; h-- {
 			pos = m.prev(pos)
 		}
 		m.top = pos
@@ -282,18 +279,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.onDocumentEnd()
 		}
 
+		if k == "pgup" {
+			m.onPageUp()
+		}
+
 		if k == "pgdown" {
 			m.onPageDown()
 		}
 
 	case tea.WindowSizeMsg:
 		if !m.ready {
-			m.pagerWidth = msg.Width
-			m.pagerHeight = msg.Height - 2
+			m.width = msg.Width
+			m.height = msg.Height - 2
 			m.ready = true
 		} else {
-			m.pagerWidth = msg.Width
-			m.pagerHeight = msg.Height - 2
+			m.width = msg.Width
+			m.height = msg.Height - 2
 		}
 	}
 
@@ -320,10 +321,10 @@ func (m *Model) populate(n int) {
 func (m *Model) segmentize(line string) []string {
 	res := make([]string, 0)
 	for line != "" {
-		l := min(m.pagerWidth, len(line))
+		l := min(m.width, len(line))
 		seg := line[:l]
-		if len(seg) < m.pagerWidth {
-			seg = fmt.Sprintf("%-*s", m.pagerWidth, seg)
+		if len(seg) < m.width {
+			seg = fmt.Sprintf("%-*s", m.width, seg)
 		}
 		res = append(res, seg)
 		line = line[l:]
@@ -332,8 +333,8 @@ func (m *Model) segmentize(line string) []string {
 }
 
 func (m *Model) View() string {
-	h := m.pagerHeight
-	w := m.pagerWidth
+	h := m.height
+	w := m.width
 	res := ""
 	renderedLines := 0
 
@@ -376,7 +377,7 @@ func (m *Model) View() string {
 		current.Segment = 0
 	}
 
-	for renderedLines < m.pagerHeight {
+	for renderedLines < m.height {
 		res += fmt.Sprintf("%-*s\n", w, " ")
 		renderedLines++
 	}
