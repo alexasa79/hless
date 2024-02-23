@@ -23,6 +23,8 @@ type Model struct {
 	lines []string
 	eof bool
 
+	marks *AVLTree[int]
+
 	top Position
 	cursorLine int
 
@@ -31,6 +33,17 @@ type Model struct {
 
 	cursorStyle lipgloss.Style
 	statusStyle lipgloss.Style
+	markStyle lipgloss.Style
+}
+
+func intComp(a, b int) int {
+	if a < b {
+		return -1
+	} else if a == b {
+		return 0
+	} else {
+		return 1
+	}
 }
 
 func initialModel(f io.Reader) *Model {
@@ -45,6 +58,8 @@ func initialModel(f io.Reader) *Model {
 		top: Position{ 0, 0 },
 		cursorLine: 0,
 
+		marks: NewAVLTree[int](intComp),
+
 		cursorStyle: lipgloss.
 			NewStyle().
 			Foreground(lipgloss.Color("#000")).
@@ -53,6 +68,10 @@ func initialModel(f io.Reader) *Model {
 			NewStyle().
 			Foreground(lipgloss.Color("#000")).
 			Background(lipgloss.Color("#fff")),
+		markStyle: lipgloss.
+			NewStyle().
+			Foreground(lipgloss.Color("#fff")).
+			Background(lipgloss.Color("#00a0e4")),
 	}
 }
 
@@ -219,6 +238,15 @@ func (m *Model) onPageDown() {
 	m.cursorLine = it.Line
 }
 
+func (m *Model) onToggleMark() {
+	log.Printf("Toggling mark at position %d\n", m.cursorLine)
+	if m.marks.Contains(m.cursorLine) {
+		m.marks.Remove(m.cursorLine)
+	} else {
+		m.marks.Insert(m.cursorLine)
+	}
+}
+
 /// Given current position of the cursor, make sure it is visible.
 /// This is needed in cases when change of terminal's size causes the cursor
 /// to become invisible (usually by being below bottom line).
@@ -285,6 +313,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if k == "pgdown" {
 			m.onPageDown()
+		}
+
+		if k == " " {
+			m.onToggleMark()
 		}
 
 	case tea.WindowSizeMsg:
@@ -362,6 +394,10 @@ func (m *Model) View() string {
 			if current.Line == m.cursorLine {
 				seg = m.cursorStyle.Render(seg)
 				desc = desc + "*"
+			} else {
+				if m.marks.Contains(current.Line) {
+					seg = m.markStyle.Render(seg)
+				}
 			}
 			if (res == "") {
 				res = seg
@@ -382,15 +418,31 @@ func (m *Model) View() string {
 		renderedLines++
 	}
 
+	cont := m.marks.Contains(m.cursorLine)
+	pred := m.marks.Predecessor(m.cursorLine)
+	succ := m.marks.Successor(m.cursorLine)
+	marks := ""
+	if cont {
+		marks = marks + "◎"
+	} else {
+		if pred != nil {
+			marks = marks + fmt.Sprintf("↑%d", m.cursorLine - *pred)
+		}
+		if succ != nil {
+			marks = marks + fmt.Sprintf("↓%d", *succ - m.cursorLine)
+		}
+	}
+	marks = m.markStyle.Render(marks)
+
 	if m.eof {
-		st1 := fmt.Sprintf("L: %d/%d", m.cursorLine + 1, len(m.lines))
+		st1 := fmt.Sprintf("L: %d/%d %s", m.cursorLine + 1, len(m.lines), marks)
 		st1 = fmt.Sprintf("%-*s", w, st1)
 		res += "\n" + m.statusStyle.Render(st1)
 
 		st2 := fmt.Sprintf("%-*s", w, "")
 		res += "\n" + m.statusStyle.Render(st2)
 	} else {
-		st1 := fmt.Sprintf("L: %d/∞", m.cursorLine + 1)
+		st1 := fmt.Sprintf("L: %d/∞ %s", m.cursorLine + 1, marks)
 		st1 = fmt.Sprintf("%-*s", w, st1)
 		res += "\n" + m.statusStyle.Render(st1)
 
