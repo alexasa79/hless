@@ -364,6 +364,40 @@ func (m *Model) segmentize(line string) []string {
 	return res
 }
 
+func (m *Model)renderStatusBar() string {
+	cont := m.marks.Contains(m.cursorLine)
+	pred := m.marks.Predecessor(m.cursorLine)
+	succ := m.marks.Successor(m.cursorLine)
+	marks := ""
+	if cont {
+		marks = marks + "◎"
+	} else {
+		if pred != nil {
+			marks = marks + fmt.Sprintf("↑%d", m.cursorLine - *pred)
+		}
+		if succ != nil {
+			marks = marks + fmt.Sprintf("↓%d", *succ - m.cursorLine)
+		}
+	}
+
+	lines := ""
+	if m.eof {
+		lines = fmt.Sprintf("L: %d/%d ", m.cursorLine + 1, len(m.lines))
+	} else {
+		lines = fmt.Sprintf("L: %d/∞ ", m.cursorLine + 1)
+	}
+
+	rest := fmt.Sprintf("%-*s", m.width - (len(lines) + len(marks)), "")
+
+	st1 := m.statusStyle.Render(lines)
+	st1 += m.markStyle.Render(marks)
+	st1 += m.statusStyle.Render(rest)
+
+	st2 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
+
+	return "\n" + st1 + "\n" + st2
+}
+
 func (m *Model) View() string {
 	h := m.height
 	w := m.width
@@ -418,37 +452,7 @@ func (m *Model) View() string {
 		renderedLines++
 	}
 
-	cont := m.marks.Contains(m.cursorLine)
-	pred := m.marks.Predecessor(m.cursorLine)
-	succ := m.marks.Successor(m.cursorLine)
-	marks := ""
-	if cont {
-		marks = marks + "◎"
-	} else {
-		if pred != nil {
-			marks = marks + fmt.Sprintf("↑%d", m.cursorLine - *pred)
-		}
-		if succ != nil {
-			marks = marks + fmt.Sprintf("↓%d", *succ - m.cursorLine)
-		}
-	}
-	marks = m.markStyle.Render(marks)
-
-	if m.eof {
-		st1 := fmt.Sprintf("L: %d/%d %s", m.cursorLine + 1, len(m.lines), marks)
-		st1 = fmt.Sprintf("%-*s", w, st1)
-		res += "\n" + m.statusStyle.Render(st1)
-
-		st2 := fmt.Sprintf("%-*s", w, "")
-		res += "\n" + m.statusStyle.Render(st2)
-	} else {
-		st1 := fmt.Sprintf("L: %d/∞ %s", m.cursorLine + 1, marks)
-		st1 = fmt.Sprintf("%-*s", w, st1)
-		res += "\n" + m.statusStyle.Render(st1)
-
-		st2 := fmt.Sprintf("%-*s", w, "")
-		res += "\n" + m.statusStyle.Render(st2)
-	}
+	res += m.renderStatusBar()
 
 	log.Printf("Rendered: %s, %d lines\n", strings.Trim(desc, " "), renderedLines)
 
