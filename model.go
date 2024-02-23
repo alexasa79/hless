@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -277,6 +278,39 @@ func (m *Model) normalizeView() {
 	}
 }
 
+func (m *Model) centerCursor() {
+	m.populate(m.cursorLine + m.height)
+
+	segs := m.segmentize(m.lines[m.cursorLine])
+
+	pos := Position {
+		Line: m.cursorLine,
+		Segment: 0,
+	}
+	for i := m.height / 2 - len(segs) / 2; m.hasPrev(pos) && i > 0; i-- {
+		pos = m.prev(pos)
+	}
+
+	m.top = pos
+	m.normalizeView()
+}
+
+func (m *Model) nextMark() {
+	succ := m.marks.Successor(m.cursorLine)
+	if succ != nil {
+		m.cursorLine = *succ
+		m.centerCursor()
+	}
+}
+
+func (m *Model) prevMark() {
+	pred := m.marks.Predecessor(m.cursorLine)
+	if pred != nil {
+		m.cursorLine = *pred
+		m.centerCursor()
+	}
+}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -317,6 +351,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if k == " " {
 			m.onToggleMark()
+		}
+
+		if k == "enter" {
+			m.centerCursor()
+		}
+
+		if k == "." {
+			m.nextMark()
+		}
+
+		if k == "," {
+			m.prevMark()
 		}
 
 	case tea.WindowSizeMsg:
@@ -369,15 +415,14 @@ func (m *Model)renderStatusBar() string {
 	pred := m.marks.Predecessor(m.cursorLine)
 	succ := m.marks.Successor(m.cursorLine)
 	marks := ""
+	if pred != nil {
+		marks = marks + fmt.Sprintf("↑%d", m.cursorLine - *pred)
+	}
 	if cont {
 		marks = marks + "◎"
-	} else {
-		if pred != nil {
-			marks = marks + fmt.Sprintf("↑%d", m.cursorLine - *pred)
-		}
-		if succ != nil {
-			marks = marks + fmt.Sprintf("↓%d", *succ - m.cursorLine)
-		}
+	}
+	if succ != nil {
+		marks = marks + fmt.Sprintf("↓%d", *succ - m.cursorLine)
 	}
 
 	lines := ""
@@ -387,7 +432,8 @@ func (m *Model)renderStatusBar() string {
 		lines = fmt.Sprintf("L: %d/∞ ", m.cursorLine + 1)
 	}
 
-	rest := fmt.Sprintf("%-*s", m.width - (len(lines) + len(marks)), "")
+	rest := fmt.Sprintf("%-*s",
+		m.width - (utf8.RuneCountInString(lines) + utf8.RuneCountInString(marks)), "")
 
 	st1 := m.statusStyle.Render(lines)
 	st1 += m.markStyle.Render(marks)
