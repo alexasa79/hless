@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -16,6 +19,42 @@ type Position struct {
 	Line int
 	Segment int
 }
+
+type Search struct {
+	regex bool
+	pattern string
+	eof bool
+}
+
+type SearchResult struct {
+	start int
+	end int
+}
+
+type CegmentRange struct {
+	start int
+	end int
+	style *lipgloss.Style
+}
+
+func (c CegmentRange) Start() int {
+	return c.start
+}
+
+func (c CegmentRange) End() int {
+	return c.end
+}
+
+func (c CegmentRange) Subrange(start int, end int) Range {
+	return CegmentRange{ start: start, end: end, style: c.style }
+}
+
+/// Colored segment of a string
+type Cegment struct {
+	subsegments []string
+	style []*lipgloss.Style
+}
+
 type Model struct {
 	ready bool
 
@@ -32,9 +71,21 @@ type Model struct {
 	width int
 	height int
 
+	defaultStyle lipgloss.Style
 	cursorStyle lipgloss.Style
 	statusStyle lipgloss.Style
 	markStyle lipgloss.Style
+
+	searchStyles [10]lipgloss.Style
+
+	activeSearchTextbox bool
+	activeSearchDirectionDown bool
+	textbox textinput.Model
+	newSearch Search
+
+	searches [10]Search
+	searchHits [10]*AVLTree[int]
+	search int
 }
 
 func intComp(a, b int) int {
@@ -48,7 +99,7 @@ func intComp(a, b int) int {
 }
 
 func initialModel(f io.Reader) *Model {
-	return &Model {
+	m := Model {
 		ready: false,
 
 		file: f,
@@ -61,6 +112,10 @@ func initialModel(f io.Reader) *Model {
 
 		marks: NewAVLTree[int](intComp),
 
+		defaultStyle: lipgloss.
+			NewStyle().
+			Foreground(lipgloss.Color("#fff")).
+			Background(lipgloss.Color("#000")),
 		cursorStyle: lipgloss.
 			NewStyle().
 			Foreground(lipgloss.Color("#000")).
@@ -73,7 +128,34 @@ func initialModel(f io.Reader) *Model {
 			NewStyle().
 			Foreground(lipgloss.Color("#fff")).
 			Background(lipgloss.Color("#00a0e4")),
+
+		searchStyles: [10] lipgloss.Style {
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#7b00ff")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#d9ff00")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#2fff00")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#ff0084")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#7b00ff")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#ff7b00")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#00fffb")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#84ff00")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#00ff7b")),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#4544c1")),
+		},
+
+		searches: [10] Search {},
+		searchHits: [10] *AVLTree[int]{},
+
+		textbox: textinput.New(),
 	}
+
+	for i := 0; i < len(m.searches); i++ {
+		m.searches[i] = Search {
+			regex: false,
+			pattern: "",
+		}
+	}
+
+	return &m
 }
 
 func (m *Model) hasNext(pos Position) bool {
@@ -126,18 +208,6 @@ func (m *Model) prev(pos Position) Position {
 	}
 
 	panic("Attempt to move before beginning of the buffer")
-}
-
-func (m *Model) Init() tea.Cmd {
-    go func() {
-        scanner := bufio.NewScanner(m.file)
-        for scanner.Scan() {
-            m.input <- scanner.Text()
-        }
-        close(m.input) // Close the channel once done reading
-    }()
-
-	return nil
 }
 
 /// Return lowest visible line and lowest visible segment in the line.
@@ -248,6 +318,76 @@ func (m *Model) onToggleMark() {
 	}
 }
 
+func (m *Model) searchMatches(line string, pat string, regex bool) []SearchResult {
+	res := make([]SearchResult, 0)
+
+	if regex {
+		re := regexp.MustCompile(pat)
+		matches := re.FindAllStringIndex(line, -1)
+		for _, match := range matches {
+			res = append(res, SearchResult{start: match[0], end: match[1]})
+		}
+	} else {
+		start := 0
+		for {
+			index := strings.Index(line[start:], pat)
+			if index == -1 {
+				break
+			}
+			matchStart := start + index
+			matchEnd := matchStart + len(pat)
+			res = append(res, SearchResult{start: matchStart, end: matchEnd})
+			start = matchEnd
+		}
+	}
+
+	return res
+}
+
+func (m *Model) findNext(search int, limit int) int {
+	curr := m.cursorLine + 1
+	m.populate(curr + 1)
+	for curr < len(m.lines) && curr < limit {
+		m.populate(curr + 2)
+
+		matches := m.searchMatches(m.lines[curr], m.searches[search].pattern, m.searches[search].regex)
+		if len(matches) > 0 {
+			m.searchHits[search].Insert(curr)
+			break
+		}
+		curr++
+	}
+
+	if curr == len(m.lines) - 1 {
+		m.searches[search].eof = true
+	}
+
+	if curr < len(m.lines) {
+		return curr
+	} else {
+		return m.cursorLine
+	}
+}
+
+func (m *Model) findPrev(search int) int {
+	curr := m.cursorLine - 1
+	m.populate(curr - 1)
+	for curr >= 0 {
+		matches := m.searchMatches(m.lines[curr], m.searches[search].pattern, m.searches[search].regex)
+		if len(matches) > 0 {
+			m.searchHits[search].Insert(curr)
+			break
+		}
+		curr--
+	}
+
+	if curr >= 0 {
+		return curr
+	} else {
+		return m.cursorLine
+	}
+}
+
 /// Given current position of the cursor, make sure it is visible.
 /// This is needed in cases when change of terminal's size causes the cursor
 /// to become invisible (usually by being below bottom line).
@@ -311,76 +451,6 @@ func (m *Model) prevMark() {
 	}
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	log.Println("Got request", msg)
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		k := msg.String()
-
-		if k == "q" || k == "ctrl+c" {
-			return m, tea.Quit
-		}
-
-		if k == "up" || k == "k" {
-			m.onKeyUp()
-		}
-
-		if k == "down" || k == "j" {
-			m.onKeyDown()
-		}
-
-		if k == "g" {
-			m.top = Position{ 0, 0 }
-			m.cursorLine = 0
-		}
-
-		if k == "G" {
-			m.onDocumentEnd()
-		}
-
-		if k == "pgup" {
-			m.onPageUp()
-		}
-
-		if k == "pgdown" {
-			m.onPageDown()
-		}
-
-		if k == " " {
-			m.onToggleMark()
-		}
-
-		if k == "enter" {
-			m.centerCursor()
-		}
-
-		if k == "." {
-			m.nextMark()
-		}
-
-		if k == "," {
-			m.prevMark()
-		}
-
-	case tea.WindowSizeMsg:
-		if !m.ready {
-			m.width = msg.Width
-			m.height = msg.Height - 2
-			m.ready = true
-		} else {
-			m.width = msg.Width
-			m.height = msg.Height - 2
-		}
-	}
-
-	m.normalizeView()
-
-	return m, cmd
-}
-
 func (m *Model) populate(n int) {
 	if m.eof {
 		return
@@ -407,6 +477,58 @@ func (m *Model) segmentize(line string) []string {
 		res = append(res, seg)
 		line = line[l:]
 	}
+	return res
+}
+
+func (m *Model) cegmentize(line string, baseStyle *lipgloss.Style, ignoreSearch bool) []Cegment {
+	segs := m.segmentize(line)
+	r0 := make([]Range, 0)
+
+	start := 0
+	for _, seg := range segs {
+		r0 = append(r0, CegmentRange{ start: start, end: start + len(seg), style: baseStyle })
+		start += len(seg)
+	}
+
+	if !ignoreSearch {
+		for i := 0; i < len(m.searches); i++ {
+			if len(m.searches[i].pattern) == 0 {
+				continue
+			}
+
+			matches := m.searchMatches(line, m.searches[i].pattern, m.searches[i].regex)
+			if len(matches) == 0 {
+				continue
+			}
+
+			r1 := make([]Range, 0)
+			for _, match := range matches {
+				r1 = append(r1, CegmentRange{ start: match.start, end: match.end, style: &m.searchStyles[i] })
+			}
+
+			r0 = RangesProduct(r0, r1)
+		}
+	}
+
+	res := make([]Cegment, len(segs))
+	res[0].style = make([]*lipgloss.Style, 0)
+	res[0].subsegments = make([]string, 0)
+	seg := 0
+	start = 0
+	for _, rr := range r0 {
+		r := rr.(CegmentRange)
+
+		res[seg].style = append(res[seg].style, r.style)
+		l := r.end - r.start
+		res[seg].subsegments = append(res[seg].subsegments, segs[seg][start:start + l])
+
+		start += l
+		if start >= len(segs[seg]) {
+			start -= len(segs[seg])
+			seg++
+		}
+	}
+
 	return res
 }
 
@@ -439,9 +561,185 @@ func (m *Model)renderStatusBar() string {
 	st1 += m.markStyle.Render(marks)
 	st1 += m.statusStyle.Render(rest)
 
-	st2 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
+	st2 := m.statusStyle.Render(" ")
+
+	for i := 0; i < len(m.searches); i++ {
+		if m.searches[i].pattern == "" {
+			continue
+		}
+
+		// cont = m.searchHits[i].Contains(m.cursorLine)
+		pred = m.searchHits[i].Predecessor(m.cursorLine)
+		succ = m.searchHits[i].Successor(m.cursorLine)
+
+		sh := ""
+		if pred != nil {
+			sh = sh + fmt.Sprintf("↑%d", m.cursorLine - *pred)
+		}
+		if succ != nil {
+			sh = sh + fmt.Sprintf("↓%d", *succ - m.cursorLine)
+		}
+		if m.searches[i].eof {
+			sh = sh + "✓"
+		}
+
+
+		st2 += m.searchStyles[i].Render(sh)
+	}
+
+	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width - utf8.RuneCountInString(st2), ""))
 
 	return "\n" + st1 + "\n" + st2
+}
+
+func (m *Model) renderSearchBar() string {
+	res := ""
+
+	text := "  <Tab>: (regex/plain)  F3/F4: Next/Prev"
+	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
+
+	prompt := fmt.Sprintf("%d: ", m.search + 1)
+
+	if m.searches[m.search].regex {
+		prompt += "(regex) > "
+	} else {
+		prompt += "(plain) > "
+	}
+	m.textbox.Width = m.width
+	m.textbox.Prompt = prompt
+	m.textbox.PromptStyle = m.searchStyles[m.search]
+	m.textbox.TextStyle = m.searchStyles[m.search]
+
+	res += "\n" + m.textbox.View()
+
+	return res
+}
+
+func (m *Model) Init() tea.Cmd {
+    go func() {
+        scanner := bufio.NewScanner(m.file)
+        for scanner.Scan() {
+            m.input <- scanner.Text()
+        }
+        close(m.input) // Close the channel once done reading
+    }()
+
+	return nil
+}
+
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmds := make([]tea.Cmd, 0)
+	var cmd tea.Cmd
+
+	log.Println("Got request", msg)
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		k := msg.String()
+
+		if m.activeSearchTextbox {
+			if k == "enter" {
+				m.activeSearchTextbox = false
+				m.textbox.Blur()
+				m.newSearch.pattern = m.textbox.Value()
+				if m.newSearch.pattern != m.searches[m.search].pattern ||
+					m.newSearch.regex != m.searches[m.search].regex {
+					m.searches[m.search] = m.newSearch
+					m.searchHits[m.search] = NewAVLTree[int](intComp)
+				}
+				m.cursorLine = m.findNext(m.search, math.MaxInt)
+			} else if k == "tab" {
+				m.newSearch.regex = !m.newSearch.regex
+			} else if k == "esc" || k == "ctrl+c" {
+				m.textbox.SetValue(m.searches[m.search].pattern)
+				m.activeSearchTextbox = false
+				m.textbox.Blur()
+			} else {
+				m.textbox, cmd = m.textbox.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+		} else {
+			if k == "q" || k == "ctrl+c" {
+				return m, tea.Quit
+			}
+
+			if k == "up" || k == "k" {
+				m.onKeyUp()
+			}
+
+			if k == "down" || k == "j" {
+				m.onKeyDown()
+			}
+
+			if k == "g" {
+				m.top = Position{ 0, 0 }
+				m.cursorLine = 0
+			}
+
+			if k == "G" {
+				m.onDocumentEnd()
+			}
+
+			if k == "pgup" {
+				m.onPageUp()
+			}
+
+			if k == "pgdown" {
+				m.onPageDown()
+			}
+
+			if k == " " {
+				m.onToggleMark()
+			}
+
+			if k == "enter" {
+				m.centerCursor()
+			}
+
+			if k == "." {
+				m.nextMark()
+			}
+
+			if k == "," {
+				m.prevMark()
+			}
+
+			if k == "/" || k == "?" {
+				m.activeSearchTextbox = true
+				cmds = append(cmds, m.textbox.Focus())
+				cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
+				if k == "/" {
+					m.activeSearchDirectionDown = true
+				}
+
+				if k == "?" {
+					m.activeSearchDirectionDown = false
+				}
+			}
+
+			if k == "n" {
+				m.cursorLine = m.findNext(m.search, math.MaxInt)
+			}
+
+			if k == "N" {
+				m.cursorLine = m.findPrev(m.search)
+			}
+		}
+
+	case tea.WindowSizeMsg:
+		if !m.ready {
+			m.width = msg.Width
+			m.height = msg.Height - 2
+			m.ready = true
+		} else {
+			m.width = msg.Width
+			m.height = msg.Height - 2
+		}
+	}
+
+	m.normalizeView()
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m *Model) View() string {
@@ -458,32 +756,43 @@ func (m *Model) View() string {
 
 	m.populate(current.Line + h)
 
+	for i := 0; i < len(m.searches); i++ {
+		if m.searches[i].pattern != "" {
+			m.findNext(i, current.Line + h)
+		}
+	}
+
 	for h > 0 {
 		if current.Line >= len(m.lines) {
 			break
 		}
 
 		line := m.lines[current.Line]
-		segs := m.segmentize(line)
 
-		for _, seg := range segs[current.Segment:] {
-			if (h == 0) {
+		var cegs []Cegment
+		if m.cursorLine == current.Line {
+			cegs = m.cegmentize(line, &m.cursorStyle, false)
+		} else {
+			cegs = m.cegmentize(line, &m.defaultStyle, false)
+		}
+
+		for _, ceg := range cegs[current.Segment:] {
+			if h == 0 {
 				break
 			}
 
-			if current.Line == m.cursorLine {
-				seg = m.cursorStyle.Render(seg)
-				desc = desc + "*"
-			} else {
-				if m.marks.Contains(current.Line) {
-					seg = m.markStyle.Render(seg)
-				}
+			seg := ""
+
+			for i := 0; i < len(ceg.subsegments); i++ {
+				seg += ceg.style[i].Render(ceg.subsegments[i])
 			}
-			if (res == "") {
+
+			if res == "" {
 				res = seg
 			} else {
 				res = res + "\n" + seg
 			}
+
 			renderedLines++
 			desc = desc + fmt.Sprintf("%v ", current)
 			h -= 1
@@ -498,9 +807,14 @@ func (m *Model) View() string {
 		renderedLines++
 	}
 
-	res += m.renderStatusBar()
+	if m.activeSearchTextbox {
+		res += m.renderSearchBar()
+	} else {
+		res += m.renderStatusBar()
+	}
 
 	log.Printf("Rendered: %s, %d lines\n", strings.Trim(desc, " "), renderedLines)
 
 	return res
 }
+
