@@ -358,7 +358,7 @@ func (m *Model) findNext(search int, limit int) int {
 		curr++
 	}
 
-	if curr == len(m.lines) - 1 {
+	if curr == len(m.lines) {
 		m.searches[search].eof = true
 	}
 
@@ -568,7 +568,6 @@ func (m *Model)renderStatusBar() string {
 			continue
 		}
 
-		// cont = m.searchHits[i].Contains(m.cursorLine)
 		pred = m.searchHits[i].Predecessor(m.cursorLine)
 		succ = m.searchHits[i].Successor(m.cursorLine)
 
@@ -582,7 +581,6 @@ func (m *Model)renderStatusBar() string {
 		if m.searches[i].eof {
 			sh = sh + "✓"
 		}
-
 
 		st2 += m.searchStyles[i].Render(sh)
 	}
@@ -600,11 +598,12 @@ func (m *Model) renderSearchBar() string {
 
 	prompt := fmt.Sprintf("%d: ", m.search + 1)
 
-	if m.searches[m.search].regex {
-		prompt += "(regex) > "
+	if m.newSearch.regex {
+		prompt += "(regex): "
 	} else {
-		prompt += "(plain) > "
+		prompt += "(plain): "
 	}
+
 	m.textbox.Width = m.width
 	m.textbox.Prompt = prompt
 	m.textbox.PromptStyle = m.searchStyles[m.search]
