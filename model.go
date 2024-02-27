@@ -585,7 +585,7 @@ func (m *Model)renderStatusBar() string {
 		st2 += m.searchStyles[i].Render(sh)
 	}
 
-	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width - utf8.RuneCountInString(st2), ""))
+	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 
 	return "\n" + st1 + "\n" + st2
 }
