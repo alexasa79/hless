@@ -332,6 +332,22 @@ func (m *Model) onPageDown() {
 	m.cursorLine = it.Line
 }
 
+func (m *Model) onHalfPageUp() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasPrev(it) && i < m.height / 2; i++ {
+		it = m.prev(it)
+	}
+	m.cursorLine = it.Line
+}
+
+func (m *Model) onHalfPageDown() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasNext(it) && i < m.height / 2; i++ {
+		it = m.next(it)
+	}
+	m.cursorLine = it.Line
+}
+
 func (m *Model) onToggleMark() {
 	log.Printf("Toggling mark at position %d\n", m.cursorLine)
 	if m.marks.Contains(m.cursorLine) {
@@ -724,6 +740,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if k == "pgdown" {
 				m.onPageDown()
+			}
+
+			if k == "f" {
+				m.onHalfPageDown()
+			}
+
+			if k == "b" {
+				m.onHalfPageUp()
 			}
 
 			if k == " " {
