@@ -824,6 +824,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.width = msg.Width
 			m.height = msg.Height - 2
 		}
+
+		m.top.Segment = 0
 	}
 
 	m.normalizeView()
@@ -910,4 +912,3 @@ func (m *Model) View() string {
 
 	return res
 }
-
