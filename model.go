@@ -687,7 +687,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.searches[m.search] = m.newSearch
 					m.searchHits[m.search] = NewAVLTree[int](intComp)
 				}
-				m.cursorLine = m.findNext(m.search, math.MaxInt)
+
+				if m.activeSearchDirectionDown {
+					m.cursorLine = m.findNext(m.search, math.MaxInt)
+				} else {
+					m.cursorLine = m.findPrev(m.search)
+				}
 			} else if k == "tab" {
 				m.newSearch.regex = !m.newSearch.regex
 			} else if k == "esc" || k == "ctrl+c" {
