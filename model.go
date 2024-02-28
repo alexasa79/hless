@@ -707,15 +707,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if m.search < len(m.searches) - 1 {
 					m.search++
+					m.newSearch = m.searches[m.search]
+					m.textbox.SetValue(m.newSearch.pattern)
 				}
 			} else if k == "ctrl+h" || k == "f3" {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
 					m.searchHits[m.search] = NewAVLTree[int](intComp)
+					m.textbox.SetCursor(len(m.newSearch.pattern))
 				}
 				if m.search > 0 {
 					m.search--
+					m.newSearch = m.searches[m.search]
+					m.textbox.SetValue(m.newSearch.pattern)
+					m.textbox.SetCursor(len(m.newSearch.pattern))
 				}
 			} else {
 				m.textbox, cmd = m.textbox.Update(msg)
