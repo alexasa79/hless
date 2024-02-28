@@ -317,6 +317,8 @@ func (m *Model) onDocumentEnd() {
 }
 
 func (m *Model) onPageUp() {
+	m.populate(m.top.Line + m.height)
+
 	it := Position{ m.cursorLine, 0 }
 	for i := 0; m.hasPrev(it) && i < m.height - 1; i++ {
 		it = m.prev(it)
@@ -333,6 +335,8 @@ func (m *Model) onPageDown() {
 }
 
 func (m *Model) onHalfPageUp() {
+	m.populate(m.top.Line + m.height)
+
 	it := Position{ m.cursorLine, 0 }
 	for i := 0; m.hasPrev(it) && i < m.height / 2; i++ {
 		it = m.prev(it)
