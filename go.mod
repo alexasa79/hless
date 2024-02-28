@@ -1,6 +1,6 @@
 module github.com/alexasa79/hless
 
-go 1.21.4
+go 1.20
 
 require (
 	github.com/charmbracelet/bubbletea v0.25.0
