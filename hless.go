@@ -75,7 +75,13 @@ func main() {
 
 	log.Println("-----------------------------------------------------------")
 
-    p := tea.NewProgram(initialModel(in), tea.WithAltScreen())
+	fi, err := in.Stat()
+	if err != nil {
+		fmt.Println("Error acquiring input file's attributes:", err)
+		os.Exit(1)
+	}
+
+    p := tea.NewProgram(initialModel(in, fi.Size()), tea.WithAltScreen())
     if _, err := p.Run(); err != nil {
         fmt.Printf("Error rendering the TUI: %v", err)
         os.Exit(1)

@@ -6,7 +6,7 @@ import (
 )
 
 func createModel(s string, w int, h int) *Model {
-	m := initialModel(strings.NewReader(s))
+	m := initialModel(strings.NewReader(s), len64(s))
 	m.width = w
 	m.height = h
 	m.ready = true
@@ -14,7 +14,7 @@ func createModel(s string, w int, h int) *Model {
 	return m
 }
 
-func (m *Model) verifyState(t *testing.T, line int, segment int, cursor int) {
+func (m *Model) verifyState(t *testing.T, line int64, segment int, cursor int64) {
 	if m.top.Line != line || m.top.Segment != segment || m.cursorLine != cursor {
 		t.Fatalf("Unexpected state: top=%v, cursor=%v. Expected %v and %v\n",
 			m.top, m.cursorLine, Position{ line, segment }, cursor)

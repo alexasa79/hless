@@ -5,12 +5,11 @@ go 1.20
 require (
 	github.com/charmbracelet/bubbletea v0.25.0
 	github.com/charmbracelet/lipgloss v0.9.1
+	github.com/fred1268/go-clap v1.1.0
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 )
 
-require (
-	github.com/atotto/clipboard v0.1.4 // indirect
-	github.com/fred1268/go-clap v1.1.0 // indirect
-)
+require github.com/atotto/clipboard v0.1.4 // indirect
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

@@ -2,15 +2,22 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
+
+	"golang.org/x/exp/constraints"
 )
 
-func min(a, b int) int {
-	if a > b {
-		return b
-	} else {
+func min[T constraints.Ordered](a, b T) T {
+	if a < b {
 		return a
 	}
+	return b
+}
+
+func len64(slice interface{}) int64 {
+	val := reflect.ValueOf(slice)
+	return int64(val.Len())
 }
 
 func assert(cond bool) {
