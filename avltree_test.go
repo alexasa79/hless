@@ -72,3 +72,26 @@ func TestRemove(t *testing.T) {
 		t.Fatalf("Unexpected 10\n")
 	}
 }
+
+func TestCount(t *testing.T) {
+	tree := NewAVLTree[int64](int64Comp)
+	if tree.Count() != 0 {
+		t.Fatalf("Unexpected number of elements")
+	}
+	tree.Insert(0)
+	if tree.Count() != 1 {
+		t.Fatalf("Unexpected number of elements")
+	}
+	tree.Insert(0)
+	if tree.Count() != 1 {
+		t.Fatalf("Unexpected number of elements")
+	}
+	tree.Remove(1)
+	if tree.Count() != 1 {
+		t.Fatalf("Unexpected number of elements")
+	}
+	tree.Remove(0)
+	if tree.Count() != 0 {
+		t.Fatalf("Unexpected number of elements")
+	}
+}

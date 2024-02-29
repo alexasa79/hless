@@ -12,10 +12,11 @@ type Node[T any] struct {
 type AVLTree[T any] struct {
 	Root *Node[T]
 	comp Comparator[T]
+	count int64
 }
 
 func NewAVLTree[T any](comp Comparator[T]) *AVLTree[T] {
-	return &AVLTree[T]{ nil, comp }
+	return &AVLTree[T]{ nil, comp, 0 }
 }
 
 func (tree *AVLTree[T]) singleRotate(root *Node[T], dir int) *Node[T] {
@@ -61,6 +62,7 @@ func (tree *AVLTree[T]) insertBalance(root *Node[T], dir int) *Node[T] {
 
 func (tree *AVLTree[T]) insertRecursive(root *Node[T], data T) (*Node[T], bool) {
 	if root == nil {
+		tree.count++
 		return &Node[T]{Data: data}, false
 	}
 	c := tree.comp(root.Data, data)
@@ -101,6 +103,8 @@ func (tree *AVLTree[T]) removeRecursive(root *Node[T], data T) *Node[T] {
 	} else if tree.comp(data, root.Data) < 0 {
 		dir = 0
 	} else {
+		tree.count--
+
 		if root.Link[0] == nil || root.Link[1] == nil {
 			var child *Node[T]
 			if root.Link[0] == nil {
@@ -220,4 +224,8 @@ func (tree *AVLTree[T]) Predecessor(data T) *T {
 		return &predecessor.Data
 	}
 	return nil
+}
+
+func (tree *AVLTree[T]) Count() int64 {
+	return tree.count
 }

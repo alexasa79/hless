@@ -24,7 +24,6 @@ type Position struct {
 type Search struct {
 	regex bool
 	pattern string
-	eof bool
 }
 
 type SearchResult struct {
@@ -198,7 +197,7 @@ func initialModel(f io.Reader, size int64) *Model {
 
 func (m *Model) hasNext(pos Position) bool {
 	m.populate(pos.Line + 1, nil)
-	segs := m.segmentize(m.lines[pos.Line])
+	segs := m.segmentize(pos.Line)
 	if pos.Segment < len(segs) - 1 {
 		return true
 	}
@@ -210,7 +209,7 @@ func (m *Model) hasNext(pos Position) bool {
 
 func (m *Model) next(pos Position) Position {
 	m.populate(pos.Line + 1, nil)
-	segs := m.segmentize(m.lines[pos.Line])
+	segs := m.segmentize(pos.Line)
 	if pos.Segment < len(segs) - 1 {
 		pos.Segment++
 		return pos
@@ -240,7 +239,7 @@ func (m *Model) prev(pos Position) Position {
 
 	if pos.Line > 0 {
 		pos.Line--
-		segs := m.segmentize(m.lines[pos.Line])
+		segs := m.segmentize(pos.Line)
 		pos.Segment = len(segs) - 1
 		return pos
 	}
@@ -272,7 +271,7 @@ func (m *Model) onKeyUp() {
 		} else {
 			if m.top.Line > 0 {
 				m.top.Line -= 1
-				segs := m.segmentize(m.lines[m.top.Line])
+				segs := m.segmentize(m.top.Line)
 				m.top.Segment = len(segs) - 1
 				m.cursorLine = m.top.Line
 			}
@@ -301,7 +300,7 @@ func (m *Model) onKeyDown() {
 		}
 	} else {
 		bottomLine, bottomSegment := m.bottomLine()
-		segs := m.segmentize(m.lines[bottomLine])
+		segs := m.segmentize(bottomLine)
 		if (bottomSegment < len(segs) - 1) {
 			m.scrollOneSegmentDown()
 		}
@@ -326,7 +325,7 @@ func (m *Model) onDocumentEnd() tea.Cmd {
 
 			var segs []string
 			for {
-				segs = m.segmentize(m.lines[line])
+				segs = m.segmentize(line)
 				if h > len(segs) {
 					h -= len(segs)
 					line--
@@ -435,10 +434,6 @@ func (m *Model) findNext(search int, limit int64) int64 {
 		curr++
 	}
 
-	if curr == len64(m.lines) {
-		m.searches[search].eof = true
-	}
-
 	if curr < len64(m.lines) {
 		return curr
 	} else {
@@ -486,7 +481,7 @@ func (m *Model) normalizeView() {
 	bottomLine, _ := m.bottomLine()
 	if m.cursorLine > bottomLine {
 		log.Printf("Cursor %d appears to be after bottom line %d", m.cursorLine, bottomLine)
-		pos := Position { m.cursorLine, len(m.segmentize(m.lines[m.cursorLine])) - 1 }
+		pos := Position { m.cursorLine, len(m.segmentize(m.cursorLine)) - 1 }
 		for h := m.height; m.hasPrev(pos) && h > 1; h-- {
 			pos = m.prev(pos)
 		}
@@ -498,7 +493,7 @@ func (m *Model) normalizeView() {
 func (m *Model) centerCursor() {
 	m.populate(m.cursorLine + int64(m.height), nil)
 
-	segs := m.segmentize(m.lines[m.cursorLine])
+	segs := m.segmentize(m.cursorLine)
 
 	pos := Position {
 		Line: m.cursorLine,
@@ -567,7 +562,8 @@ func (m *Model) populate(n int64, interruptChannel chan bool) (prog float64, int
 	return
 }
 
-func (m *Model) segmentize(line string) []string {
+func (m *Model) segmentize(lineIndex int64) []string {
+	line := m.lines[lineIndex]
 	res := make([]string, 0)
 	for line != "" {
 		l := min(m.width, len(line))
@@ -581,9 +577,11 @@ func (m *Model) segmentize(line string) []string {
 	return res
 }
 
-func (m *Model) cegmentize(line string, baseStyle *lipgloss.Style) []Cegment {
-	segs := m.segmentize(line)
+func (m *Model) cegmentize(lineIndex int64, baseStyle *lipgloss.Style) []Cegment {
+	segs := m.segmentize(lineIndex)
 	r0 := make([]Range, 0)
+
+	line := m.lines[lineIndex]
 
 	start := 0
 	for _, seg := range segs {
@@ -600,6 +598,7 @@ func (m *Model) cegmentize(line string, baseStyle *lipgloss.Style) []Cegment {
 		if len(matches) == 0 {
 			continue
 		}
+		m.searchHits[i].Insert(lineIndex)
 
 		r1 := make([]Range, 0)
 		for _, match := range matches {
@@ -638,20 +637,21 @@ func (m *Model)renderStatusBar() string {
 
 	lines := ""
 	if m.eof {
-		lines = fmt.Sprintf("L: %d/%d, %d bytes", m.cursorLine + 1, len64(m.lines), m.fileSize)
+		lines = fmt.Sprintf("Line %s/%s  Size %s bytes", sprint64(m.cursorLine + 1), sprint64(len64(m.lines)),
+			sprint64(m.fileSize))
 	} else {
-		lines = fmt.Sprintf("L: %d/∞, %d bytes ", m.cursorLine + 1, m.fileSize)
+		lines = fmt.Sprintf("Line %s/∞  Size %s bytes ", sprint64(m.cursorLine + 1), sprint64(m.fileSize))
 	}
 
 	marks := ""
 	if pred != nil {
-		marks = marks + fmt.Sprintf("↑%d", m.cursorLine - *pred)
+		marks = marks + fmt.Sprintf("↑%s", sprint64(m.cursorLine - *pred))
 	}
 	if cont {
 		marks = marks + "◎"
 	}
 	if succ != nil {
-		marks = marks + fmt.Sprintf("↓%d", *succ - m.cursorLine)
+		marks = marks + fmt.Sprintf("↓%s", sprint64(*succ - m.cursorLine))
 	}
 
 	rest := fmt.Sprintf("%-*s",
@@ -661,7 +661,7 @@ func (m *Model)renderStatusBar() string {
 	st1 += m.markStyle.Render(marks)
 	st1 += m.statusStyle.Render(rest)
 
-	st2 := m.statusStyle.Render(" ")
+	st2 := m.statusStyle.Render("")
 
 	for i := 0; i < len(m.searches); i++ {
 		if m.searches[i].pattern == "" {
@@ -673,14 +673,12 @@ func (m *Model)renderStatusBar() string {
 
 		sh := ""
 		if pred != nil {
-			sh = sh + fmt.Sprintf("↑%d", m.cursorLine - *pred)
+			sh += fmt.Sprintf("↑%s ", sprint64(m.cursorLine - *pred))
 		}
 		if succ != nil {
-			sh = sh + fmt.Sprintf("↓%d", *succ - m.cursorLine)
+			sh += fmt.Sprintf("↓%s ", sprint64(*succ - m.cursorLine))
 		}
-		if m.searches[i].eof {
-			sh = sh + "✓"
-		}
+		sh += fmt.Sprintf("◎%d", m.searchHits[i].Count())
 
 		st2 += m.searchStyles[i].Render(sh)
 	}
@@ -695,10 +693,10 @@ func (m *Model) renderProgress() string {
 
 	res += "\n"
 
-	text := " Press Ctrl+c or Esc to interrupt"
+	text := "Press Ctrl+c or Esc to interrupt"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
-	text = fmt.Sprintf(" Reading: %.2f%% done", m.currentProgress * 100)
+	text = fmt.Sprintf("Reading: %.2f%% done", m.currentProgress * 100)
 	res += "\n"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
@@ -708,7 +706,7 @@ func (m *Model) renderProgress() string {
 func (m *Model) renderSearchBar() string {
 	res := ""
 
-	text := "  Tab: (regex/plain)  Ctrl+h/Ctrl+l or F3/F4: Next/Prev"
+	text := "Tab: (regex/plain)  Ctrl+h/Ctrl+l or F3/F4: Next/Prev"
 	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
 
 	prompt := fmt.Sprintf("%d: ", m.search + 1)
@@ -963,16 +961,14 @@ func (m *Model) View() string {
 			break
 		}
 
-		line := m.lines[current.Line]
-
 		var cegs []Cegment
 		if m.cursorLine == current.Line {
-			cegs = m.cegmentize(line, &m.cursorStyle)
+			cegs = m.cegmentize(current.Line, &m.cursorStyle)
 		} else {
 			if m.marks.Contains(current.Line) {
-				cegs = m.cegmentize(line, &m.markStyle)
+				cegs = m.cegmentize(current.Line, &m.markStyle)
 			} else {
-				cegs = m.cegmentize(line, &m.defaultStyle)
+				cegs = m.cegmentize(current.Line, &m.defaultStyle)
 			}
 		}
 
