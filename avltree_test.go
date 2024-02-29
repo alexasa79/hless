@@ -5,7 +5,7 @@ import (
 )
 
 func TestIntTree1(t *testing.T) {
-	tree := NewAVLTree[int64](int64Comp)
+	tree := NewAVLTree(int64Comp)
 	for i := int64(0); i < 100; i++ {
 		tree.Insert(i)
 	}
@@ -18,7 +18,7 @@ func TestIntTree1(t *testing.T) {
 }
 
 func TestIntSuccessor(t *testing.T) {
-	tree := NewAVLTree[int64](int64Comp)
+	tree := NewAVLTree(int64Comp)
 	for i := int64(0); i < 100; i += 10 {
 		tree.Insert(i)
 	}
@@ -34,7 +34,7 @@ func TestIntSuccessor(t *testing.T) {
 }
 
 func TestIntPredecessor(t *testing.T) {
-	tree := NewAVLTree[int64](int64Comp)
+	tree := NewAVLTree(int64Comp)
 	for i := int64(0); i < 100; i += 10 {
 		tree.Insert(i)
 	}
@@ -50,7 +50,7 @@ func TestIntPredecessor(t *testing.T) {
 }
 
 func TestContains(t *testing.T) {
-	tree := NewAVLTree[int64](int64Comp)
+	tree := NewAVLTree(int64Comp)
 	tree.Insert(10)
 	if !tree.Contains(10) {
 		t.Fatalf("Missing 10\n")
@@ -65,16 +65,16 @@ func TestContains(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	tree := NewAVLTree[int64](int64Comp)
+	tree := NewAVLTree(int64Comp)
 	tree.Insert(0)
 	tree.Remove(0)
 	if tree.Contains(0) {
-		t.Fatalf("Unexpected 10\n")
+		t.Fatalf("Unexpected 0\n")
 	}
 }
 
 func TestCount(t *testing.T) {
-	tree := NewAVLTree[int64](int64Comp)
+	tree := NewAVLTree(int64Comp)
 	if tree.Count() != 0 {
 		t.Fatalf("Unexpected number of elements")
 	}
@@ -94,4 +94,12 @@ func TestCount(t *testing.T) {
 	if tree.Count() != 0 {
 		t.Fatalf("Unexpected number of elements")
 	}
+}
+
+func TestSearchRanges(t *testing.T) {
+	tree := NewAVLTree(searchRangeComp)
+	tree.Insert(SearchRange{1, 1})
+	tree.Insert(SearchRange{2, 2})
+	tree.Remove(SearchRange{2, 2})
+	tree.Insert(SearchRange{2, 3})
 }

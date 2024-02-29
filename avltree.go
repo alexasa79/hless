@@ -3,229 +3,218 @@ package main
 /// Returns -1 of a < b, 0 if a == b and 1 if a > b
 type Comparator[T any] func(a, b T) int
 
-type Node[T any] struct {
-	Data    T
-	Balance int
-	Link    [2]*Node[T]
+type node[T any] struct {
+	data T
+	left *node[T]
+	right *node[T]
+	height int
 }
 
 type AVLTree[T any] struct {
-	Root *Node[T]
+	root *node[T]
 	comp Comparator[T]
 	count int64
 }
 
-func NewAVLTree[T any](comp Comparator[T]) *AVLTree[T] {
-	return &AVLTree[T]{ nil, comp, 0 }
-}
-
-func (tree *AVLTree[T]) singleRotate(root *Node[T], dir int) *Node[T] {
-	save := root.Link[dir^1]
-	root.Link[dir^1] = save.Link[dir]
-	save.Link[dir] = root
-	return save
-}
-
-func (tree *AVLTree[T]) doubleRotate(root *Node[T], dir int) *Node[T] {
-	root.Link[dir^1] = tree.singleRotate(root.Link[dir^1], dir^1)
-	return tree.singleRotate(root, dir)
-}
-
-func (tree *AVLTree[T]) adjustBalance(root *Node[T], dir, bal int) {
-	n := root.Link[dir]
-	nn := n.Link[dir^1]
-	switch nn.Balance {
-	case 0:
-		root.Balance = 0
-		n.Balance = 0
-	case bal:
-		root.Balance = -bal
-		n.Balance = 0
-	default:
-		root.Balance = 0
-		n.Balance = bal
+func (n *node[T]) updateHeight() {
+	left, right := -1, -1
+	if n.left != nil {
+		left = n.left.height
 	}
-	nn.Balance = 0
+	if n.right != nil {
+		right = n.right.height
+	}
+	if left > right {
+		n.height = left + 1
+	} else {
+		n.height = right + 1
+	}
 }
 
-func (tree *AVLTree[T]) insertBalance(root *Node[T], dir int) *Node[T] {
-	n := root.Link[dir]
-	bal := 2*dir - 1
-	if n.Balance == bal {
-		root.Balance = 0
-		n.Balance = 0
-		return tree.singleRotate(root, dir^1)
-	}
-	tree.adjustBalance(root, dir, bal)
-	return tree.doubleRotate(root, dir^1)
+func (n *node[T]) rightRotation() *node[T] {
+	n1 := n.left
+	n.left = n1.right
+	n1.right = n
+	n.updateHeight()
+	n1.updateHeight()
+	return n1
 }
 
-func (tree *AVLTree[T]) insertRecursive(root *Node[T], data T) (*Node[T], bool) {
-	if root == nil {
-		tree.count++
-		return &Node[T]{Data: data}, false
+func (n *node[T]) leftRotation() *node[T] {
+	n1 := n.right
+	n.right = n1.left
+	n1.left = n
+	n.updateHeight()
+	n1.updateHeight()
+	return n1
+}
+
+func (n *node[T]) balanceFactor() int {
+	left, right := -1, -1
+	if n.left != nil {
+		left = n.left.height
 	}
-	c := tree.comp(root.Data, data)
-	if c == 0 {
-		return root, true
+	if n.right != nil {
+		right = n.right.height
 	}
-	dir := 0
+	return left - right
+}
+
+func (n *node[T]) rebalance() *node[T] {
+	bf := n.balanceFactor()
+	if bf > 1 {
+		if n.left != nil && n.left.balanceFactor() < 0 {
+			n.left = n.left.leftRotation()
+		}
+		n = n.rightRotation()
+	} else if bf < -1 {
+		if n.right != nil && n.right.balanceFactor() > 0 {
+			n.right = n.right.rightRotation()
+		}
+		n = n.leftRotation()
+	}
+	return n
+}
+
+func (t *AVLTree[T]) insert(n, m *node[T]) *node[T] {
+	if n == nil {
+		t.count++
+		return m
+	}
+
+	c := t.comp(m.data, n.data)
 	if c < 0 {
-		dir = 1
-	}
-	var done bool
-	root.Link[dir], done = tree.insertRecursive(root.Link[dir], data)
-	if done {
-		return root, true
-	}
-	root.Balance += 2*dir - 1
-	switch root.Balance {
-	case 0:
-		return root, true
-	case 1, -1:
-		return root, false
-	}
-	return tree.insertBalance(root, dir), true
-}
-
-func (tree *AVLTree[T]) Insert(data T) {
-	tree.Root, _ = tree.insertRecursive(tree.Root, data)
-}
-
-func (tree *AVLTree[T]) removeRecursive(root *Node[T], data T) *Node[T] {
-	if root == nil {
-		return nil
-	}
-
-	dir := 0
-	if tree.comp(data, root.Data) > 0 {
-		dir = 1
-	} else if tree.comp(data, root.Data) < 0 {
-		dir = 0
+		n.left = t.insert(n.left, m)
+	} else if c > 0 {
+		n.right = t.insert(n.right, m)
 	} else {
-		tree.count--
-
-		if root.Link[0] == nil || root.Link[1] == nil {
-			var child *Node[T]
-			if root.Link[0] == nil {
-				child = root.Link[1]
-			} else {
-				child = root.Link[0]
-			}
-			return child
-		}
-
-		heir := root.Link[1]
-		for heir.Link[0] != nil {
-			heir = heir.Link[0]
-		}
-		root.Data = heir.Data
-		data = heir.Data
-		dir = 1
+		n.data = m.data
 	}
-
-	updatedNode := tree.removeRecursive(root.Link[dir], data)
-	root.Link[dir] = updatedNode
-	if updatedNode == nil {
-		return root
-	}
-
-	root.Balance += 1 - 2*dir
-	switch root.Balance {
-	case 0:
-		return root
-	case 1, -1:
-		return root
-	}
-
-	return tree.removeBalance(root, 1 - dir)
+	n.updateHeight()
+	return n.rebalance()
 }
 
-func (tree *AVLTree[T]) removeBalance(root *Node[T], dir int) *Node[T] {
-	n := root.Link[dir^1]
-	bal := 2*(dir^1) - 1
-	if n.Balance == -bal {
-		root.Balance = 0
-		n.Balance = 0
-		return tree.singleRotate(root, dir)
-	}
-	if n.Balance == bal {
-		tree.adjustBalance(root, dir^1, -bal)
-	} else {
-		root.Balance = -bal
-		n.Balance = bal
-	}
-	return tree.doubleRotate(root, dir)
+func (t *AVLTree[T]) Insert(data T) {
+	n := &node[T]{ data: data }
+	t.root = t.insert(t.root, n)
 }
 
-func (tree *AVLTree[T]) Remove(data T) {
-	tree.Root = tree.removeRecursive(tree.Root, data)
+func (t *AVLTree[T]) remove(n *node[T], data T) *node[T] {
+    if n == nil {
+        return nil
+    }
+	c := t.comp(data, n.data)
+
+    if c < 0 {
+        n.left = t.remove(n.left, data)
+    } else if c > 0 {
+        n.right = t.remove(n.right, data)
+    } else {
+		t.count--
+        if n.right != nil {
+            successor := n.right
+            for successor.left != nil {
+                successor = successor.left
+            }
+            n.data = successor.data
+            n.right = t.remove(n.right, successor.data)
+        } else if n.left != nil {
+            n = n.left
+        } else {
+            n = nil
+            return n
+        }
+    }
+    if n != nil {
+        n.updateHeight()
+        n = n.rebalance()
+    }
+    return n
 }
 
-func (tree *AVLTree[T]) Contains(data T) bool {
-	current := tree.Root
-	for current != nil {
-		c := tree.comp(current.Data, data)
-		if c == 0 {
-			return true
-		}
+func (t *AVLTree[T]) Remove(data T) {
+	t.root = t.remove(t.root, data)
+}
+
+func (t *AVLTree[T]) Contains(data T) bool {
+	for current := t.root; current != nil; {
+		c := t.comp(data, current.data)
 		if c < 0 {
-			current = current.Link[1]
+			current = current.left
+		} else if c > 0 {
+			current = current.right
 		} else {
-			current = current.Link[0]
+			return true
 		}
 	}
 	return false
 }
 
-func (tree *AVLTree[T]) Successor(data T) *T {
-	var successor *Node[T]
-	current := tree.Root
-	for current != nil {
-		c1 := tree.comp(current.Data, data)
-		if c1 > 0 {
+func (t *AVLTree[T]) Get(data T) *T {
+	for current := t.root; current != nil; {
+		c := t.comp(data, current.data)
+		if c < 0 {
+			current = current.left
+		} else if c > 0 {
+			current = current.right
+		} else {
+			return &current.data
+		}
+	}
+	return nil
+}
+
+func (t *AVLTree[T]) Successor(data T) *T {
+	var successor *node[T]
+	for current := t.root; current != nil; {
+		c1 := t.comp(data, current.data)
+		if c1 < 0 {
 			if successor == nil {
 				successor = current
 			}
-			c2 := tree.comp(successor.Data, current.Data)
+			c2 := t.comp(successor.data, current.data)
 			if c2 > 0 {
 				successor = current
 			}
-			current = current.Link[0]
+			current = current.left
 		} else {
-			current = current.Link[1]
+			current = current.right
 		}
 	}
 	if successor != nil {
-		return &successor.Data
+		return &successor.data
 	}
 	return nil
 }
 
 func (tree *AVLTree[T]) Predecessor(data T) *T {
-	var predecessor *Node[T]
-	current := tree.Root
+	var predecessor *node[T]
+	current := tree.root
 	for current != nil {
-		c1 := tree.comp(current.Data, data)
-		if c1 < 0 {
+		c1 := tree.comp(data, current.data)
+		if c1 > 0 {
 			if predecessor == nil {
 				predecessor = current
 			}
-			c2 := tree.comp(predecessor.Data, current.Data)
+			c2 := tree.comp(predecessor.data, current.data)
 			if c2 < 0 {
 				predecessor = current
 			}
-			current = current.Link[1]
+			current = current.right
 		} else {
-			current = current.Link[0]
+			current = current.left
 		}
 	}
 	if predecessor != nil {
-		return &predecessor.Data
+		return &predecessor.data
 	}
 	return nil
 }
 
 func (tree *AVLTree[T]) Count() int64 {
 	return tree.count
+}
+
+func NewAVLTree[T any](comp Comparator[T]) *AVLTree[T] {
+	return &AVLTree[T]{ nil, comp, 0 }
 }
