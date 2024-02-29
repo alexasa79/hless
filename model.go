@@ -31,6 +31,11 @@ type SearchResult struct {
 	end int
 }
 
+type SearchRange struct {
+	start int64
+	end int64
+}
+
 type CegmentRange struct {
 	start int
 	end int
@@ -92,6 +97,7 @@ type Model struct {
 
 	searches [9]Search
 	searchHits [9]*AVLTree[int64]
+	searchRanges [9]*AVLTree[SearchRange]
 	search int
 
 	inProgress bool
@@ -133,6 +139,10 @@ func int64Comp(a, b int64) int {
 	} else {
 		return 1
 	}
+}
+
+func searchRangeComp(a, b SearchRange) int {
+	return int64Comp(a.start, b.start)
 }
 
 func initialModel(f io.Reader, size int64) *Model {
@@ -182,6 +192,7 @@ func initialModel(f io.Reader, size int64) *Model {
 
 		searches: [9] Search {},
 		searchHits: [9] *AVLTree[int64]{},
+		searchRanges: [9] *AVLTree[SearchRange]{},
 
 		textbox: textinput.New(),
 	}
@@ -422,6 +433,58 @@ func (m *Model) searchMatches(line string, pat string, regex bool) []SearchResul
 	return res
 }
 
+func (m *Model) updateSearchRange(search int, r SearchRange) {
+	log.Printf("updateSearchRange -> %v", r)
+	if r.end == r.start {
+		return
+	}
+
+	tree := m.searchRanges[search]
+	t := tree.Get(r)
+	if t != nil {
+		r.end = max(t.end, r.end)
+		if r.start != t.start || r.end != t.end {
+			tree.Remove(r)
+			tree.Insert(r)
+		}
+	} else {
+		pred := tree.Predecessor(r)
+		if pred != nil {
+			// Ranges intersect
+			if pred.start <= r.end && r.start <= pred.end {
+				r.start = min(r.start, pred.start)
+				r.end = max(r.end, pred.end)
+				tree.Remove(*pred)
+			}
+		}
+		tree.Insert(r)
+	}
+}
+
+func (m *Model) searchScreen(search int, limit int64) int64 {
+	curr := m.cursorLine
+	m.populate(curr + 1, nil)
+	r := SearchRange{m.cursorLine, 0}
+	for curr < len64(m.lines) && curr < limit {
+		m.populate(curr + 2, nil)
+
+		matches := m.searchMatches(m.lines[curr], m.searches[search].pattern, m.searches[search].regex)
+		if len(matches) > 0 {
+			m.searchHits[search].Insert(curr)
+		}
+		curr++
+	}
+
+	r.end = curr
+	m.updateSearchRange(search, r)
+
+	if curr < len64(m.lines) {
+		return curr
+	} else {
+		return m.cursorLine
+	}
+}
+
 func (m *Model) findNextWithProgress(search int) tea.Cmd {
 	searchLine := m.cursorLine + int64(1)
 	lastProgress := float64(0)
@@ -433,6 +496,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		batch := int64(100000)
 		var prog float64 = 0
 		interrupted := false
+		r := SearchRange{searchLine, 0}
 		if len64(m.lines) - searchLine < batch {
 			prog, interrupted = m.populate(math.MaxInt64, m.progressInterrupt)
 		}
@@ -470,31 +534,13 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		prog = max(prog, lastProgress)
 		lastProgress = prog
 
+		r.end = searchLine
+		m.updateSearchRange(search, r)
+
 		return ProgressReport {
 			progress: prog,
 			interrupted: interrupted,
 		}
-	}
-}
-
-func (m *Model) findNext(search int, limit int64) int64 {
-	curr := m.cursorLine + 1
-	m.populate(curr + 1, nil)
-	for curr < len64(m.lines) && curr < limit {
-		m.populate(curr + 2, nil)
-
-		matches := m.searchMatches(m.lines[curr], m.searches[search].pattern, m.searches[search].regex)
-		if len(matches) > 0 {
-			m.searchHits[search].Insert(curr)
-			break
-		}
-		curr++
-	}
-
-	if curr < len64(m.lines) {
-		return curr
-	} else {
-		return m.cursorLine
 	}
 }
 
@@ -510,6 +556,7 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		batch := int64(100000)
 		var prog float64 = 0
 		interrupted := false
+		r := SearchRange{searchLine, 0}
 		select {
 		case interrupted = <- m.progressInterrupt:
 			break
@@ -541,29 +588,13 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		prog = max(prog, lastProgress)
 		lastProgress = prog
 
+		r.end = searchLine
+		m.updateSearchRange(search, r)
+
 		return ProgressReport {
 			progress: prog,
 			interrupted: interrupted,
 		}
-	}
-}
-
-func (m *Model) findPrev(search int) int64 {
-	curr := m.cursorLine - 1
-	m.populate(curr - 1, nil)
-	for curr >= 0 {
-		matches := m.searchMatches(m.lines[curr], m.searches[search].pattern, m.searches[search].regex)
-		if len(matches) > 0 {
-			m.searchHits[search].Insert(curr)
-			break
-		}
-		curr--
-	}
-
-	if curr >= 0 {
-		return curr
-	} else {
-		return m.cursorLine
 	}
 }
 
@@ -705,7 +736,6 @@ func (m *Model) cegmentize(lineIndex int64, baseStyle *lipgloss.Style) []Cegment
 		if len(matches) == 0 {
 			continue
 		}
-		m.searchHits[i].Insert(lineIndex)
 
 		r1 := make([]Range, 0)
 		for _, match := range matches {
@@ -780,10 +810,20 @@ func (m *Model)renderStatusBar() string {
 
 		sh := ""
 		if pred != nil {
-			sh += fmt.Sprintf("↑%s ", sprint64(m.cursorLine - *pred))
+			r := m.searchRanges[i].Predecessor(SearchRange{ *pred, 0 })
+			if r != nil && *pred >= r.start && *pred < r.end {
+				sh += fmt.Sprintf("↑%s ", sprint64(m.cursorLine - *pred))
+			} else {
+				sh += fmt.Sprintf("↑⋯%s ", sprint64(m.cursorLine - *pred))
+			}
 		}
 		if succ != nil {
-			sh += fmt.Sprintf("↓%s ", sprint64(*succ - m.cursorLine))
+			r := m.searchRanges[i].Predecessor(SearchRange{ *succ, 0 })
+			if r != nil && *succ >= r.start && *succ < r.end {
+				sh += fmt.Sprintf("↓%s ", sprint64(*succ - m.cursorLine))
+			} else {
+				sh += fmt.Sprintf("↓⋯%s ", sprint64(*succ - m.cursorLine))
+			}
 		}
 		sh += fmt.Sprintf("◎%d", m.searchHits[i].Count())
 
@@ -877,7 +917,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = NewAVLTree[int64](int64Comp)
+					m.searchHits[m.search] = NewAVLTree(int64Comp)
+					m.searchRanges[m.search] = NewAVLTree(searchRangeComp)
 				}
 
 				if m.activeSearchDirectionDown {
@@ -897,7 +938,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = NewAVLTree[int64](int64Comp)
+					m.searchHits[m.search] = NewAVLTree(int64Comp)
+					m.searchRanges[m.search] = NewAVLTree(searchRangeComp)
 				}
 				if m.search < len(m.searches) - 1 {
 					m.search++
@@ -908,7 +950,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = NewAVLTree[int64](int64Comp)
+					m.searchHits[m.search] = NewAVLTree(int64Comp)
+					m.searchRanges[m.search] = NewAVLTree(searchRangeComp)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
 				}
 				if m.search > 0 {
@@ -1065,7 +1108,7 @@ func (m *Model) View() string {
 
 	for i := 0; i < len(m.searches); i++ {
 		if m.searches[i].pattern != "" {
-			m.findNext(i, current.Line + int64(h))
+			m.searchScreen(i, current.Line + int64(h))
 		}
 	}
 

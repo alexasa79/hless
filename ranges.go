@@ -6,71 +6,9 @@ type Range interface {
 	Subrange(start int, end int) Range
 }
 
-// type pivot struct {
-// 	n int
-// 	r int
-// 	rr *Range
-// 	start bool
-// }
-
-// func Intersects(a, b *Range) bool {
-//     return (*a).Start() <= (*b).End() && (*b).Start() <= (*a).End()
-// }
-
-/// Assume sorted, two non overlapping lists of ranges, find
-// func RangesProduct(ranges1 []Range, ranges2 []Range) []Range {
-// 	pivots := make([]pivot, len(ranges1) * 2 + len(ranges2) * 2)
-// 	n := 0
-// 	for _, r := range ranges1 {
-// 		pivots[n].n = r.Start()
-// 		pivots[n].r = 1
-// 		pivots[n].rr = &r
-// 		pivots[n].start = true
-// 		n++
-// 		pivots[n].n = r.End()
-// 		pivots[n].r = 1
-// 		pivots[n].rr = &r
-// 		pivots[n].start = false
-// 		n++
-// 	}
-
-// 	for _, r := range ranges2 {
-// 		pivots[n].n = r.Start()
-// 		pivots[n].r = 2
-// 		pivots[n].rr = &r
-// 		pivots[n].start = true
-// 		n++
-// 		pivots[n].n = r.End()
-// 		pivots[n].r = 2
-// 		pivots[n].rr = &r
-// 		pivots[n].start = false
-// 		n++
-// 	}
-
-// 	sort.Slice(pivots, func(i, j int) bool {
-// 		if pivots[i].n < pivots[j].n {
-// 			return true
-// 		}
-// 		if pivots[i].n == pivots[j].n {
-// 			return pivots[i].r == pivots[j].r
-// 		}
-// 		return false
-// 	})
-
-// 	res := make([]Range, 0)
-
-// 	for i := 0; i < n - 1; i++ {
-// 		if pivots[i].n != pivots[i + 1].n {
-// 			if pivots[i].start {
-// 				res = append(res, (*pivots[i].rr).Subrange(pivots[i].n, pivots[i + 1].n))
-// 			} else {
-// 				res = append(res, (*pivots[i + 1].rr).Subrange(pivots[i].n, pivots[i + 1].n))
-// 			}
-// 		}
-// 	}
-
-// 	return res
-// }
+func Intersect(a, b *Range) bool {
+    return (*a).Start() <= (*b).End() && (*b).Start() <= (*a).End()
+}
 
 /// Assume sorted, two non overlapping lists of ranges, find
 func RangesProduct(ranges1 []Range, ranges2 []Range) []Range {
