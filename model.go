@@ -98,6 +98,7 @@ type Model struct {
 	currentProgress float64
 	progressInterrupt chan bool
 	progressCmd tea.Cmd
+	progressPrompt string
 }
 
 var searchForwardRunes = map[string]int{
@@ -307,9 +308,10 @@ func (m *Model) onKeyDown() {
 	}
 }
 
-func (m *Model) startProgress(progressCmd tea.Cmd) tea.Cmd {
+func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
 	m.progressInterrupt = make(chan bool)
 	m.inProgress = true
+	m.progressPrompt = prompt
 	m.progressCmd = progressCmd
 	return progressCmd
 }
@@ -420,6 +422,61 @@ func (m *Model) searchMatches(line string, pat string, regex bool) []SearchResul
 	return res
 }
 
+func (m *Model) findNextWithProgress(search int) tea.Cmd {
+	searchLine := m.cursorLine + int64(1)
+	lastProgress := float64(0)
+	return func() tea.Msg {
+		// One of two things can happen. Either we already read to the end of the file.
+		// In this case we set the progress based on the current search line out of total
+		// number of lines. Or we did not yet reach the end of the file. In this case
+		// we set the progress to be the progress returned by populate()
+		batch := int64(100000)
+		var prog float64 = 0
+		interrupted := false
+		if len64(m.lines) - searchLine < batch {
+			prog, interrupted = m.populate(math.MaxInt64, m.progressInterrupt)
+		}
+
+		if !interrupted {
+			select {
+			case interrupted = <- m.progressInterrupt:
+				break
+			default:
+				found := false
+				for searchLine < len64(m.lines) && batch > 0 {
+					matches := m.searchMatches(m.lines[searchLine],
+						m.searches[search].pattern, m.searches[search].regex)
+					if len(matches) > 0 {
+						m.searchHits[search].Insert(searchLine)
+						found = true
+						break
+					}
+					searchLine++
+					batch--
+				}
+
+				if found {
+					interrupted = true
+					m.cursorLine = searchLine
+				} else if m.eof {
+					prog = float64(searchLine) / float64(len(m.lines))
+					if searchLine == len64(m.lines) {
+						interrupted = true
+					}
+				}
+			}
+		}
+
+		prog = max(prog, lastProgress)
+		lastProgress = prog
+
+		return ProgressReport {
+			progress: prog,
+			interrupted: interrupted,
+		}
+	}
+}
+
 func (m *Model) findNext(search int, limit int64) int64 {
 	curr := m.cursorLine + 1
 	m.populate(curr + 1, nil)
@@ -438,6 +495,56 @@ func (m *Model) findNext(search int, limit int64) int64 {
 		return curr
 	} else {
 		return m.cursorLine
+	}
+}
+
+func (m *Model) findPrevWithProgress(search int) tea.Cmd {
+	searchLine := m.cursorLine - int64(1)
+	lastProgress := float64(0)
+	m.populate(searchLine - 1, nil)
+	return func() tea.Msg {
+		// One of two things can happen. Either we already read to the end of the file.
+		// In this case we set the progress based on the current search line out of total
+		// number of lines. Or we did not yet reach the end of the file. In this case
+		// we set the progress to be the progress returned by populate()
+		batch := int64(100000)
+		var prog float64 = 0
+		interrupted := false
+		select {
+		case interrupted = <- m.progressInterrupt:
+			break
+		default:
+			found := false
+			for searchLine >= 0 && batch > 0 {
+				matches := m.searchMatches(m.lines[searchLine],
+					m.searches[search].pattern, m.searches[search].regex)
+				if len(matches) > 0 {
+					m.searchHits[search].Insert(searchLine)
+					found = true
+					break
+				}
+				searchLine--
+				batch--
+			}
+
+			if found {
+				interrupted = true
+				m.cursorLine = searchLine
+			} else if m.eof {
+				prog = float64(searchLine) / float64(len(m.lines))
+				if searchLine == len64(m.lines) {
+					interrupted = true
+				}
+			}
+		}
+
+		prog = max(prog, lastProgress)
+		lastProgress = prog
+
+		return ProgressReport {
+			progress: prog,
+			interrupted: interrupted,
+		}
 	}
 }
 
@@ -696,7 +803,7 @@ func (m *Model) renderProgress() string {
 	text := "Press Ctrl+c or Esc to interrupt"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
-	text = fmt.Sprintf("Reading: %.2f%% done", m.currentProgress * 100)
+	text = fmt.Sprintf("%s: %.1f%% done", m.progressPrompt, m.currentProgress * 100)
 	res += "\n"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
@@ -737,7 +844,7 @@ func (m *Model) Init() tea.Cmd {
 			if m.fileSize != math.MaxInt64 {
 				counter += int64(len(s))
 				t := float64(counter) / float64(m.fileSize)
-				if t - lastProgress > 0.01 {
+				if t - lastProgress > 0.001 {
 					lastProgress = t
 					m.fileReadProgress <- t
 				}
@@ -774,9 +881,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if m.activeSearchDirectionDown {
-					m.cursorLine = m.findNext(m.search, math.MaxInt)
+					cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+					cmds = append(cmds, cmd)
 				} else {
-					m.cursorLine = m.findPrev(m.search)
+					cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+					cmds = append(cmds, cmd)
 				}
 			} else if k == "tab" {
 				m.newSearch.regex = !m.newSearch.regex
@@ -839,7 +948,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if k == "G" {
-				cmd = m.startProgress(m.onDocumentEnd())
+				cmd = m.startProgress("Reading", m.onDocumentEnd())
 				cmds = append(cmds, cmd)
 			}
 
@@ -889,22 +998,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if k == "n" {
-				m.cursorLine = m.findNext(m.search, math.MaxInt64)
+				cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+				cmds = append(cmds, cmd)
 			}
 
 			if k == "N" {
-				m.cursorLine = m.findPrev(m.search)
+				cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+				cmds = append(cmds, cmd)
 			}
 
 			if search, ok := searchForwardRunes[k]; ok {
 				if m.searches[search].pattern != "" {
-					m.cursorLine = m.findNext(search, math.MaxInt64)
+					cmd = m.startProgress("Searching", m.findNextWithProgress(search))
+					cmds = append(cmds, cmd)
 				}
 			}
 
 			if search, ok := searchBackwardRunes[k]; ok {
 				if m.searches[search].pattern != "" {
-					m.cursorLine = m.findPrev(search)
+					cmd = m.startProgress("Searching", m.findPrevWithProgress(search))
+					cmds = append(cmds, cmd)
 				}
 			}
 		}
