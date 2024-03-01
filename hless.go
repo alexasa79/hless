@@ -17,7 +17,7 @@ type config struct {
 	InputFiles []string `clap:"trailing"`
 }
 
-var help string = `Usage: hless [OPTIONS] FILE
+var help string = `Usage: hh [OPTIONS] FILE
 
   A utility for displaying and analyzing log files
 
