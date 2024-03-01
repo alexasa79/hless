@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/alexasa79/hless/internal/avltree"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -74,7 +75,7 @@ type Model struct {
 	eof bool
 	fileReadProgress chan float64
 
-	marks *AVLTree[int64]
+	marks *avltree.AVLTree[int64]
 
 	top Position
 	cursorLine int64
@@ -95,8 +96,8 @@ type Model struct {
 	newSearch Search
 
 	searches [9]Search
-	searchHits [9]*AVLTree[int64]
-	searchRanges [9]*AVLTree[SearchRange]
+	searchHits [9]*avltree.AVLTree[int64]
+	searchRanges [9]*avltree.AVLTree[SearchRange]
 	search int
 
 	inProgress bool
@@ -158,7 +159,7 @@ func initialModel(f io.Reader, size int64) *Model {
 		top: Position{ 0, 0 },
 		cursorLine: 0,
 
-		marks: NewAVLTree[int64](int64Comp),
+		marks: avltree.NewAVLTree[int64](int64Comp),
 
 		defaultStyle: lipgloss.NewStyle(),
 		cursorStyle: lipgloss.
@@ -187,8 +188,8 @@ func initialModel(f io.Reader, size int64) *Model {
 		},
 
 		searches: [9] Search {},
-		searchHits: [9] *AVLTree[int64]{},
-		searchRanges: [9] *AVLTree[SearchRange]{},
+		searchHits: [9] *avltree.AVLTree[int64]{},
+		searchRanges: [9] *avltree.AVLTree[SearchRange]{},
 
 		textbox: textinput.New(),
 	}
@@ -898,7 +899,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
-	ModelLogger.Info("Got request", reflect.TypeOf(msg), msg)
+	ModelLogger.Info("Got request %v %v", reflect.TypeOf(msg), msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -912,8 +913,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = NewAVLTree(int64Comp)
-					m.searchRanges[m.search] = NewAVLTree(searchRangeComp)
+					m.searchHits[m.search] = avltree.NewAVLTree(int64Comp)
+					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 				}
 
 				if m.activeSearchDirectionDown {
@@ -933,8 +934,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = NewAVLTree(int64Comp)
-					m.searchRanges[m.search] = NewAVLTree(searchRangeComp)
+					m.searchHits[m.search] = avltree.NewAVLTree(int64Comp)
+					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 				}
 				if m.search < len(m.searches) - 1 {
 					m.search++
@@ -945,8 +946,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = NewAVLTree(int64Comp)
-					m.searchRanges[m.search] = NewAVLTree(searchRangeComp)
+					m.searchHits[m.search] = avltree.NewAVLTree(int64Comp)
+					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
 				}
 				if m.search > 0 {

@@ -1,4 +1,4 @@
-package main
+package avltree
 
 /// Returns -1 of a < b, 0 if a == b and 1 if a > b
 type Comparator[T any] func(a, b T) int

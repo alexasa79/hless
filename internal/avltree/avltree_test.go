@@ -1,8 +1,27 @@
-package main
+package avltree
 
 import (
 	"testing"
 )
+
+type SearchRange struct {
+	start int64
+	end int64
+}
+
+func int64Comp(a, b int64) int {
+	if a < b {
+		return -1
+	} else if a == b {
+		return 0
+	} else {
+		return 1
+	}
+}
+
+func searchRangeComp(a, b SearchRange) int {
+	return int64Comp(a.start, b.start)
+}
 
 func TestIntTree1(t *testing.T) {
 	tree := NewAVLTree(int64Comp)
