@@ -160,10 +160,7 @@ func initialModel(f io.Reader, size int64) *Model {
 
 		marks: NewAVLTree[int64](int64Comp),
 
-		defaultStyle: lipgloss.
-			NewStyle().
-			Foreground(lipgloss.Color("#fff")).
-			Background(lipgloss.Color("#000")),
+		defaultStyle: lipgloss.NewStyle(),
 		cursorStyle: lipgloss.
 			NewStyle().
 			Foreground(lipgloss.Color("#000")).
