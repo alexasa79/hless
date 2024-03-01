@@ -2,17 +2,17 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 
+	"github.com/alexasa79/hless/internal/ll"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fred1268/go-clap/clap"
 )
 
 type config struct {
 	Help bool `clap:"--help,-h"`
-	Debug  bool `clap:"--debug"`
+	Debug  string `clap:"--debug"`
+	Trace string `clap:"--trace"`
 	Version bool `clap:"--version,-V"`
 	InputFiles []string `clap:"trailing"`
 }
@@ -24,15 +24,26 @@ var help string = `Usage: hless [OPTIONS] FILE
 Options:
   -h, --help
   -V, --version         Show the version and exit.
-      --debug           Enable debug logging.
+      --debug [MODS]    Enable debug logging for specified comma separated
+	                    list of modules.
+      --trace [MODS]    Enable trace logging for specified comma separated
+	                    list of modules. Implies --debug.
+
+  Supported modules with --debug and --trace:
+    all, view, model, search
 `
 
 var version string = "hless version 0.0.1"
 
+var ViewLogger *ll.Logger
+var SearchLogger *ll.Logger
+var ModelLogger *ll.Logger
+
 func main() {
 	cfg := &config {
 		Help: false,
-		Debug: false,
+		Debug: "",
+		Trace: "",
 		InputFiles: make([]string, 0),
 	}
 	if _, err := clap.Parse(os.Args[1:], cfg); err != nil {
@@ -62,18 +73,13 @@ func main() {
 	}
 	defer in.Close()
 
-	if cfg.Debug {
-		f, err := tea.LogToFile("hless.log", "")
-		if err != nil {
-			fmt.Println("Error opening debug log:", err)
-			os.Exit(1)
-		}
-		defer f.Close()
-	} else {
-		log.SetOutput(ioutil.Discard)
+	if cfg.Debug != "" || cfg.Trace != "" {
+		ll.SetupLogging("hless.log")
+		ViewLogger = ll.NewLogger("VIEW  ")
+		SearchLogger = ll.NewLogger("SEARCH")
+		ModelLogger = ll.NewLogger("MODEL ")
+		defer ll.CleanupLogging()
 	}
-
-	log.Println("-----------------------------------------------------------")
 
 	fi, err := in.Stat()
 	if err != nil {

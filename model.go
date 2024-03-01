@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"reflect"
 	"regexp"
@@ -298,12 +297,12 @@ func (m *Model) onKeyDown() {
 
 	if m.cursorLine < len64(m.lines) - 1 {
 		bottomLine, bottomSegment := m.bottomLine()
-		log.Printf("Scrolling down. Top line is %v, cursor %d, bottom %d(%d)",
+		ModelLogger.Info("Scrolling down. Top line is %v, cursor %d, bottom %d(%d)",
 			m.top, m.cursorLine, bottomLine, bottomSegment)
 		if m.cursorLine == bottomLine {
 			m.scrollOneSegmentDown()
 			bottomLine, bottomSegment = m.bottomLine()
-			log.Printf("New bottom %d(%d)\n", bottomLine, bottomSegment)
+			ModelLogger.Info("New bottom %d(%d)", bottomLine, bottomSegment)
 			if m.cursorLine < bottomLine {
 				m.cursorLine += 1
 			}
@@ -399,7 +398,7 @@ func (m *Model) onHalfPageDown() {
 }
 
 func (m *Model) onToggleMark() {
-	log.Printf("Toggling mark at position %d\n", m.cursorLine)
+	ModelLogger.Info("Toggling mark at position %d", m.cursorLine)
 	if m.marks.Contains(m.cursorLine) {
 		m.marks.Remove(m.cursorLine)
 	} else {
@@ -434,7 +433,6 @@ func (m *Model) searchMatches(line string, pat string, regex bool) []SearchResul
 }
 
 func (m *Model) updateSearchRange(search int, r SearchRange) {
-	log.Printf("updateSearchRange -> %v", r)
 	if r.end == r.start {
 		return
 	}
@@ -609,22 +607,22 @@ func (m *Model) normalizeView() {
 	m.populate(m.top.Line + int64(m.height), nil)
 
 	if m.top.Line > m.cursorLine {
-		log.Printf("Cursor %d appears to be before top line %d", m.cursorLine, m.top.Line)
+		ModelLogger.Info("Cursor %d appears to be before top line %d", m.cursorLine, m.top.Line)
 		m.top.Line = m.cursorLine
 		m.top.Segment = 0
-		log.Printf("Fixed top line to %v", m.top)
+		ModelLogger.Info("Fixed top line to %v", m.top)
 		return
 	}
 
 	bottomLine, _ := m.bottomLine()
 	if m.cursorLine > bottomLine {
-		log.Printf("Cursor %d appears to be after bottom line %d", m.cursorLine, bottomLine)
+		ModelLogger.Info("Cursor %d appears to be after bottom line %d", m.cursorLine, bottomLine)
 		pos := Position { m.cursorLine, len(m.segmentize(m.cursorLine)) - 1 }
 		for h := m.height; m.hasPrev(pos) && h > 1; h-- {
 			pos = m.prev(pos)
 		}
 		m.top = pos
-		log.Printf("Fixed top line to %v", m.top)
+		ModelLogger.Info("Fixed top line to %v", m.top)
 	}
 }
 
@@ -903,7 +901,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
-	log.Println("Got request", reflect.TypeOf(msg), msg)
+	ModelLogger.Info("Got request", reflect.TypeOf(msg), msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -1101,7 +1099,7 @@ func (m *Model) View() string {
 	current := m.top
 	desc := ""
 
-	log.Printf("Rendering the view from line %v, cursor %d, dimensions %dx%d\n",
+	ViewLogger.Info("Rendering the view from line %v, cursor %d, dimensions %dx%d",
 		current, m.cursorLine, w, h)
 
 	m.populate(current.Line + int64(h), nil)
@@ -1167,7 +1165,7 @@ func (m *Model) View() string {
 		res += m.renderStatusBar()
 	}
 
-	log.Printf("Rendered: %s, %d lines\n", strings.Trim(desc, " "), renderedLines)
+	ViewLogger.Info("Rendered: %s, %d lines", strings.Trim(desc, " "), renderedLines)
 
 	return res
 }
