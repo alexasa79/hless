@@ -201,7 +201,7 @@ func (m *Model) hasNext(pos Position) bool {
 	if pos.Segment < len(segs) - 1 {
 		return true
 	}
-	if pos.Line < utils.Len64(m.lines) - 1 {
+	if pos.Line < m.lines.Nlines() - 1 {
 		return true
 	}
 	return false
@@ -215,7 +215,7 @@ func (m *Model) next(pos Position) Position {
 		return pos
 	}
 
-	if pos.Line < utils.Len64(m.lines) - 1 {
+	if pos.Line < m.lines.Nlines() - 1 {
 		pos.Line++
 		pos.Segment = 0
 		return pos
@@ -284,7 +284,7 @@ func (m *Model) onKeyDown() {
 
 	m.lines.Populate(m.cursorLine + int64(h), nil)
 
-	if m.cursorLine < utils.Len64(m.lines) - 1 {
+	if m.cursorLine < m.lines.Nlines() - 1 {
 		bottomLine, bottomSegment := m.bottomLine()
 		ModelLogger.Info("Scrolling down. Top line is %v, cursor %d, bottom %d(%d)",
 			m.top, m.cursorLine, bottomLine, bottomSegment)
@@ -321,8 +321,8 @@ func (m *Model) onDocumentEnd() tea.Cmd {
 		if !interrupted && m.lines.Eof() {
 			h := m.height
 
-			m.cursorLine = utils.Len64(m.lines) - 1
-			line := utils.Len64(m.lines) - 1
+			m.cursorLine = m.lines.Nlines() - 1
+			line := m.lines.Nlines() - 1
 
 			var segs []string
 			for {
@@ -452,7 +452,7 @@ func (m *Model) searchScreen(search int, limit int64) int64 {
 	curr := m.cursorLine
 	m.lines.Populate(curr + 1, nil)
 	r := SearchRange{m.cursorLine, 0}
-	for curr < utils.Len64(m.lines) && curr < limit {
+	for curr < m.lines.Nlines() && curr < limit {
 		m.lines.Populate(curr + 2, nil)
 
 		matches := m.searchMatches(m.lines.Nth(curr), m.searches[search].pattern, m.searches[search].regex)
@@ -465,7 +465,7 @@ func (m *Model) searchScreen(search int, limit int64) int64 {
 	r.end = curr
 	m.updateSearchRange(search, r)
 
-	if curr < utils.Len64(m.lines) {
+	if curr < m.lines.Nlines() {
 		return curr
 	} else {
 		return m.cursorLine
@@ -484,7 +484,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		var prog float64 = 0
 		interrupted := false
 		r := SearchRange{searchLine, 0}
-		if utils.Len64(m.lines) - searchLine < batch {
+		if m.lines.Nlines() - searchLine < batch {
 			prog, interrupted = m.lines.Populate(math.MaxInt64, m.progressInterrupt)
 		}
 
@@ -494,7 +494,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 				break
 			default:
 				found := false
-				for searchLine < utils.Len64(m.lines) && batch > 0 {
+				for searchLine < m.lines.Nlines() && batch > 0 {
 					matches := m.searchMatches(m.lines.Nth(searchLine),
 						m.searches[search].pattern, m.searches[search].regex)
 					if len(matches) > 0 {
@@ -511,7 +511,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 					m.cursorLine = searchLine
 				} else if m.lines.Eof() {
 					prog = float64(searchLine) / float64(m.lines.Nlines())
-					if searchLine == utils.Len64(m.lines) {
+					if searchLine == m.lines.Nlines() {
 						interrupted = true
 					}
 				}
@@ -566,7 +566,7 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 				m.cursorLine = searchLine
 			} else if m.lines.Eof() {
 				prog = float64(searchLine) / float64(m.lines.Nlines())
-				if searchLine == utils.Len64(m.lines) {
+				if searchLine == m.lines.Nlines() {
 					interrupted = true
 				}
 			}
@@ -723,7 +723,7 @@ func (m *Model)renderStatusBar() string {
 	lines := ""
 	if m.lines.Eof() {
 		lines = fmt.Sprintf("Line %s/%s  Size %s bytes",
-			utils.Sprint64(m.cursorLine + 1), utils.Sprint64(utils.Len64(m.lines)),
+			utils.Sprint64(m.cursorLine + 1), utils.Sprint64(m.lines.Nlines()),
 			utils.Sprint64(m.lines.FileSize()))
 	} else {
 		lines = fmt.Sprintf("Line %s/∞  Size %s bytes ", utils.Sprint64(m.cursorLine + 1),
@@ -1042,7 +1042,7 @@ func (m *Model) View() string {
 	}
 
 	for h > 0 {
-		if current.Line >= utils.Len64(m.lines) {
+		if current.Line >= m.lines.Nlines() {
 			break
 		}
 

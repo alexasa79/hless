@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/alexasa79/hless/internal/logging"
+	hlesslog "github.com/alexasa79/hless/internal/logging"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fred1268/go-clap/clap"
 )
@@ -35,9 +35,9 @@ Options:
 
 var version string = "hless version 0.0.1"
 
-var ViewLogger *logging.Logger
-var SearchLogger *logging.Logger
-var ModelLogger *logging.Logger
+var ViewLogger *hlesslog.Logger
+var SearchLogger *hlesslog.Logger
+var ModelLogger *hlesslog.Logger
 
 func main() {
 	cfg := &config {
@@ -74,11 +74,11 @@ func main() {
 	defer in.Close()
 
 	if cfg.Debug != "" || cfg.Trace != "" {
-		logging.SetupLogging("hless.log")
-		ViewLogger = logging.NewLogger("VIEW  ")
-		SearchLogger = logging.NewLogger("SEARCH")
-		ModelLogger = logging.NewLogger("MODEL ")
-		defer logging.CleanupLogging()
+		hlesslog.SetupLogging("hless.log")
+		ViewLogger = hlesslog.NewLogger("VIEW  ")
+		SearchLogger = hlesslog.NewLogger("SEARCH")
+		ModelLogger = hlesslog.NewLogger("MODEL ")
+		defer hlesslog.CleanupLogging()
 	}
 
 	fi, err := in.Stat()
