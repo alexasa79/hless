@@ -58,13 +58,13 @@ func levelToString(level LogLevel) string {
     case DEBUG:
         return "DEBUG"
     case INFO:
-        return "INFO "
+        return "INFO"
     case WARNING:
-        return "WARN "
+        return "WARN"
     case ERROR:
         return "ERROR"
     default:
-        return "UNKNOWN"
+        panic("Unsupported log level")
     }
 }
 
@@ -72,7 +72,7 @@ func (logger *Logger) log(level LogLevel, format string, args ...interface{}) {
     if logFile != nil && logger != nil && level >= logger.MinLevel {
         t := fmt.Sprintf(format, args...)
         _, file, line, _ := runtime.Caller(2)
-        logLine := fmt.Sprintf("%s %s %s %.10s:%4d: %s\n",
+        logLine := fmt.Sprintf("%s %5s %5s %.10s:%4d: %s\n",
             time.Now().Format("2006-01-02T15:04:05.000000"), logger.Name, levelToString(level),
             filepath.Base(file), line, t)
         logFile.Write([]byte(logLine))
