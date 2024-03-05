@@ -155,7 +155,8 @@ func initialModel(f io.Reader, size int64) *Model {
 		defaultStyle: lipgloss.NewStyle(),
 		cursorStyle: lipgloss.
 			NewStyle().
-			Background(lipgloss.Color("#ffda45")),
+			Background(lipgloss.Color("#ffda45")).
+			Foreground(lipgloss.Color("#000000")),
 		statusStyle: lipgloss.
 			NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
