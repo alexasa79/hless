@@ -1033,6 +1033,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.normalizeView()
 
+	ML.Debug("Returning commands %v", cmds)
+
 	return m, tea.Batch(cmds...)
 }
 

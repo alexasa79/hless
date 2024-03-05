@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alexasa79/hless/internal/lines"
 	hlesslog "github.com/alexasa79/hless/internal/logging"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fred1268/go-clap/clap"
@@ -31,7 +32,7 @@ Options:
 	                    list of modules. Implies --debug.
 
   Supported modules with --debug and --trace:
-    all, view, model, search
+    all, view, model, search, lines
 `
 
 var version string = "hless version 0.0.1"
@@ -39,6 +40,7 @@ var version string = "hless version 0.0.1"
 var VL *hlesslog.Logger
 var SL *hlesslog.Logger
 var ML *hlesslog.Logger
+var LL *hlesslog.Logger
 
 func main() {
 	cfg := &config {
@@ -79,6 +81,7 @@ func main() {
 		ML = hlesslog.NewLogger("MODEL")
 		VL = hlesslog.NewLogger("VIEW")
 		SL = hlesslog.NewLogger("SEARCH")
+		LL = hlesslog.NewLogger("LINES")
 		defer hlesslog.CleanupLogging()
 
 		setLevels := func(s string, newLevel hlesslog.LogLevel) {
@@ -86,11 +89,13 @@ func main() {
 				switch level {
 				case "model": ML.MinLevel = newLevel
 				case "view": VL.MinLevel = newLevel
-				case "search": VL.MinLevel = newLevel
+				case "search": SL.MinLevel = newLevel
+				case "lines": LL.MinLevel = newLevel
 				case "all":
 					ML.MinLevel = newLevel
 					VL.MinLevel = newLevel
 					SL.MinLevel = newLevel
+					LL.MinLevel = newLevel
 				}
 			}
 		}
@@ -99,8 +104,11 @@ func main() {
 		setLevels(cfg.Trace, hlesslog.TRACE)
 
 		ML.Info("Logging at level %v", SL.MinLevel)
-		VL.Info("Logging at level %v", SL.MinLevel)
+		VL.Info("Logging at level %v", VL.MinLevel)
 		SL.Info("Logging at level %v", SL.MinLevel)
+		LL.Info("Logging at level %v", LL.MinLevel)
+
+		lines.LL = LL
 	}
 
 	fi, err := in.Stat()
