@@ -155,27 +155,25 @@ func initialModel(f io.Reader, size int64) *Model {
 		defaultStyle: lipgloss.NewStyle(),
 		cursorStyle: lipgloss.
 			NewStyle().
-			Foreground(lipgloss.Color("#000")).
 			Background(lipgloss.Color("#ffda45")),
 		statusStyle: lipgloss.
 			NewStyle().
-			Foreground(lipgloss.Color("#000")).
-			Background(lipgloss.Color("#fff")),
+			Background(lipgloss.Color("#eeeeee")).
+			Foreground(lipgloss.Color("#000000")),
 		markStyle: lipgloss.
 			NewStyle().
-			Foreground(lipgloss.Color("#fff")).
 			Background(lipgloss.Color("#00a0e4")),
 
 		searchStyles: [9] lipgloss.Style {
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#7b00ff")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#d9ff00")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#2fff00")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#ff0084")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#4544c1")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#ff7b00")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#00fffb")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#84ff00")),
-			lipgloss.NewStyle().Foreground(lipgloss.Color("#fff")).Background(lipgloss.Color("#00ff7b")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#a50cfe")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#cd19ff")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#f026ff")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#ff32ee")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#ff3fd2")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#fe4cba")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#ff59a6")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#ff6596")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#ff728a")),
 		},
 
 		searches: [9] Search {},
@@ -818,7 +816,7 @@ func (m *Model) renderProgress() string {
 func (m *Model) renderSearchBar() string {
 	res := ""
 
-	text := "Tab: (regex/plain)  Ctrl+h/Ctrl+l or F3/F4: Next/Prev"
+	text := "Tab: (regex/plain)  Ctrl+h/Ctrl+l or F2/F4: Next/Prev"
 	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
 
 	prompt := fmt.Sprintf("%d: ", m.search + 1)
@@ -890,7 +888,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.newSearch = m.searches[m.search]
 					m.textbox.SetValue(m.newSearch.pattern)
 				}
-			} else if k == "ctrl+h" || k == "f3" {
+			} else if k == "ctrl+h" || k == "f2" {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
@@ -943,7 +941,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onPageUp()
 			}
 
-			if k == "pgdown" {
+			if k == "pgdown" || k == " " {
 				m.onPageDown()
 			}
 
@@ -955,7 +953,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onHalfPageUp()
 			}
 
-			if k == " " {
+			if k == "m" {
 				m.onToggleMark()
 			}
 
