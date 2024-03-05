@@ -3,10 +3,12 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/alexasa79/hless/internal/utils"
 )
 
 func createModel(s string, w int, h int) *Model {
-	m := initialModel(strings.NewReader(s), len64(s))
+	m := initialModel(strings.NewReader(s), utils.Len64(s))
 	m.width = w
 	m.height = h
 	m.ready = true

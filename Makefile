@@ -1,5 +1,5 @@
 hless:
-	go build  -o hh .
+	go build -o hh .
 
 clean:
 	go clean

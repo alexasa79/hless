@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"math"
@@ -11,6 +10,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/alexasa79/hless/internal/avltree"
+	"github.com/alexasa79/hless/internal/lines"
+	"github.com/alexasa79/hless/internal/utils"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -68,12 +69,7 @@ type Cegment struct {
 type Model struct {
 	ready bool
 
-	file io.Reader
-	fileSize int64
-	input chan string
-	lines []string
-	eof bool
-	fileReadProgress chan float64
+	lines *lines.Lines
 
 	marks *avltree.AVLTree[int64]
 
@@ -149,12 +145,7 @@ func initialModel(f io.Reader, size int64) *Model {
 	m := Model {
 		ready: false,
 
-		file: f,
-		fileSize: size,
-		input: make(chan string),
-		lines: make([]string, 0),
-		eof: false,
-		fileReadProgress: make(chan float64, 10000),
+		lines: lines.NewLines(f, size),
 
 		top: Position{ 0, 0 },
 		cursorLine: 0,
@@ -205,26 +196,26 @@ func initialModel(f io.Reader, size int64) *Model {
 }
 
 func (m *Model) hasNext(pos Position) bool {
-	m.populate(pos.Line + 1, nil)
+	m.lines.Populate(pos.Line + 1, nil)
 	segs := m.segmentize(pos.Line)
 	if pos.Segment < len(segs) - 1 {
 		return true
 	}
-	if pos.Line < len64(m.lines) - 1 {
+	if pos.Line < utils.Len64(m.lines) - 1 {
 		return true
 	}
 	return false
 }
 
 func (m *Model) next(pos Position) Position {
-	m.populate(pos.Line + 1, nil)
+	m.lines.Populate(pos.Line + 1, nil)
 	segs := m.segmentize(pos.Line)
 	if pos.Segment < len(segs) - 1 {
 		pos.Segment++
 		return pos
 	}
 
-	if pos.Line < len64(m.lines) - 1 {
+	if pos.Line < utils.Len64(m.lines) - 1 {
 		pos.Line++
 		pos.Segment = 0
 		return pos
@@ -291,9 +282,9 @@ func (m *Model) onKeyUp() {
 func (m *Model) onKeyDown() {
 	h := m.height
 
-	m.populate(m.cursorLine + int64(h), nil)
+	m.lines.Populate(m.cursorLine + int64(h), nil)
 
-	if m.cursorLine < len64(m.lines) - 1 {
+	if m.cursorLine < utils.Len64(m.lines) - 1 {
 		bottomLine, bottomSegment := m.bottomLine()
 		ModelLogger.Info("Scrolling down. Top line is %v, cursor %d, bottom %d(%d)",
 			m.top, m.cursorLine, bottomLine, bottomSegment)
@@ -326,12 +317,12 @@ func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
 
 func (m *Model) onDocumentEnd() tea.Cmd {
 	return func() tea.Msg {
-		prog, interrupted := m.populate(math.MaxInt64, m.progressInterrupt)
-		if !interrupted && m.eof {
+		prog, interrupted := m.lines.Populate(math.MaxInt64, m.progressInterrupt)
+		if !interrupted && m.lines.Eof() {
 			h := m.height
 
-			m.cursorLine = len64(m.lines) - 1
-			line := len64(m.lines) - 1
+			m.cursorLine = utils.Len64(m.lines) - 1
+			line := utils.Len64(m.lines) - 1
 
 			var segs []string
 			for {
@@ -368,7 +359,7 @@ func (m *Model) onPageUp() {
 }
 
 func (m *Model) onPageDown() {
-	m.populate(m.cursorLine + int64(m.height), nil)
+	m.lines.Populate(m.cursorLine + int64(m.height), nil)
 
 	it := Position{ m.cursorLine, 0 }
 	for i := 0; m.hasNext(it) && i < m.height - 1; i++ {
@@ -386,7 +377,7 @@ func (m *Model) onHalfPageUp() {
 }
 
 func (m *Model) onHalfPageDown() {
-	m.populate(m.cursorLine + int64(m.height), nil)
+	m.lines.Populate(m.cursorLine + int64(m.height), nil)
 
 	it := Position{ m.cursorLine, 0 }
 	for i := 0; m.hasNext(it) && i < m.height / 2; i++ {
@@ -438,7 +429,7 @@ func (m *Model) updateSearchRange(search int, r SearchRange) {
 	tree := m.searchRanges[search]
 	t := tree.Get(r)
 	if t != nil {
-		r.end = max(t.end, r.end)
+		r.end = utils.Max(t.end, r.end)
 		if r.start != t.start || r.end != t.end {
 			tree.Remove(r)
 			tree.Insert(r)
@@ -448,8 +439,8 @@ func (m *Model) updateSearchRange(search int, r SearchRange) {
 		if pred != nil {
 			// Ranges intersect
 			if pred.start <= r.end && r.start <= pred.end {
-				r.start = min(r.start, pred.start)
-				r.end = max(r.end, pred.end)
+				r.start = utils.Min(r.start, pred.start)
+				r.end = utils.Max(r.end, pred.end)
 				tree.Remove(*pred)
 			}
 		}
@@ -459,12 +450,12 @@ func (m *Model) updateSearchRange(search int, r SearchRange) {
 
 func (m *Model) searchScreen(search int, limit int64) int64 {
 	curr := m.cursorLine
-	m.populate(curr + 1, nil)
+	m.lines.Populate(curr + 1, nil)
 	r := SearchRange{m.cursorLine, 0}
-	for curr < len64(m.lines) && curr < limit {
-		m.populate(curr + 2, nil)
+	for curr < utils.Len64(m.lines) && curr < limit {
+		m.lines.Populate(curr + 2, nil)
 
-		matches := m.searchMatches(m.lines[curr], m.searches[search].pattern, m.searches[search].regex)
+		matches := m.searchMatches(m.lines.Nth(curr), m.searches[search].pattern, m.searches[search].regex)
 		if len(matches) > 0 {
 			m.searchHits[search].Insert(curr)
 		}
@@ -474,7 +465,7 @@ func (m *Model) searchScreen(search int, limit int64) int64 {
 	r.end = curr
 	m.updateSearchRange(search, r)
 
-	if curr < len64(m.lines) {
+	if curr < utils.Len64(m.lines) {
 		return curr
 	} else {
 		return m.cursorLine
@@ -493,8 +484,8 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		var prog float64 = 0
 		interrupted := false
 		r := SearchRange{searchLine, 0}
-		if len64(m.lines) - searchLine < batch {
-			prog, interrupted = m.populate(math.MaxInt64, m.progressInterrupt)
+		if utils.Len64(m.lines) - searchLine < batch {
+			prog, interrupted = m.lines.Populate(math.MaxInt64, m.progressInterrupt)
 		}
 
 		if !interrupted {
@@ -503,8 +494,8 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 				break
 			default:
 				found := false
-				for searchLine < len64(m.lines) && batch > 0 {
-					matches := m.searchMatches(m.lines[searchLine],
+				for searchLine < utils.Len64(m.lines) && batch > 0 {
+					matches := m.searchMatches(m.lines.Nth(searchLine),
 						m.searches[search].pattern, m.searches[search].regex)
 					if len(matches) > 0 {
 						m.searchHits[search].Insert(searchLine)
@@ -518,16 +509,16 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 				if found {
 					interrupted = true
 					m.cursorLine = searchLine
-				} else if m.eof {
-					prog = float64(searchLine) / float64(len(m.lines))
-					if searchLine == len64(m.lines) {
+				} else if m.lines.Eof() {
+					prog = float64(searchLine) / float64(m.lines.Nlines())
+					if searchLine == utils.Len64(m.lines) {
 						interrupted = true
 					}
 				}
 			}
 		}
 
-		prog = max(prog, lastProgress)
+		prog = utils.Max(prog, lastProgress)
 		lastProgress = prog
 
 		r.end = searchLine
@@ -543,7 +534,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 	searchLine := m.cursorLine - int64(1)
 	lastProgress := float64(0)
-	m.populate(searchLine - 1, nil)
+	m.lines.Populate(searchLine - 1, nil)
 	return func() tea.Msg {
 		// One of two things can happen. Either we already read to the end of the file.
 		// In this case we set the progress based on the current search line out of total
@@ -559,7 +550,7 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		default:
 			found := false
 			for searchLine >= 0 && batch > 0 {
-				matches := m.searchMatches(m.lines[searchLine],
+				matches := m.searchMatches(m.lines.Nth(searchLine),
 					m.searches[search].pattern, m.searches[search].regex)
 				if len(matches) > 0 {
 					m.searchHits[search].Insert(searchLine)
@@ -573,15 +564,15 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 			if found {
 				interrupted = true
 				m.cursorLine = searchLine
-			} else if m.eof {
-				prog = float64(searchLine) / float64(len(m.lines))
-				if searchLine == len64(m.lines) {
+			} else if m.lines.Eof() {
+				prog = float64(searchLine) / float64(m.lines.Nlines())
+				if searchLine == utils.Len64(m.lines) {
 					interrupted = true
 				}
 			}
 		}
 
-		prog = max(prog, lastProgress)
+		prog = utils.Max(prog, lastProgress)
 		lastProgress = prog
 
 		r.end = searchLine
@@ -602,7 +593,7 @@ func (m *Model) normalizeView() {
 		return
 	}
 
-	m.populate(m.top.Line + int64(m.height), nil)
+	m.lines.Populate(m.top.Line + int64(m.height), nil)
 
 	if m.top.Line > m.cursorLine {
 		ModelLogger.Info("Cursor %d appears to be before top line %d", m.cursorLine, m.top.Line)
@@ -625,7 +616,7 @@ func (m *Model) normalizeView() {
 }
 
 func (m *Model) centerCursor() {
-	m.populate(m.cursorLine + int64(m.height), nil)
+	m.lines.Populate(m.cursorLine + int64(m.height), nil)
 
 	segs := m.segmentize(m.cursorLine)
 
@@ -657,50 +648,11 @@ func (m *Model) prevMark() {
 	}
 }
 
-func (m *Model) populate(n int64, interruptChannel chan bool) (prog float64, interrupt bool) {
-	if m.eof {
-		return 0, false
-	}
-
-	prog = 0
-	interrupt = false
-	ok := true
-
-	var line string
-	for len64(m.lines) < n {
-		if interruptChannel != nil {
-			select {
-			case line, ok = <- m.input:
-				if ok {
-					m.lines = append(m.lines, line)
-				} else {
-					m.eof = true
-					return
-				}
-			case prog, ok = <- m.fileReadProgress:
-				return
-
-			case interrupt, ok = <- interruptChannel:
-				return
-			}
-		} else {
-			if line, ok = <- m.input; ok {
-				m.lines = append(m.lines, line)
-			} else {
-				m.eof = true
-				break
-			}
-		}
-	}
-
-	return
-}
-
 func (m *Model) segmentize(lineIndex int64) []string {
-	line := m.lines[lineIndex]
+	line := m.lines.Nth(lineIndex)
 	res := make([]string, 0)
 	for line != "" {
-		l := min(m.width, len(line))
+		l := utils.Min(m.width, len(line))
 		seg := line[:l]
 		if len(seg) < m.width {
 			seg = fmt.Sprintf("%-*s", m.width, seg)
@@ -715,7 +667,7 @@ func (m *Model) cegmentize(lineIndex int64, baseStyle *lipgloss.Style) []Cegment
 	segs := m.segmentize(lineIndex)
 	r0 := make([]Range, 0)
 
-	line := m.lines[lineIndex]
+	line := m.lines.Nth(lineIndex)
 
 	start := 0
 	for _, seg := range segs {
@@ -769,22 +721,24 @@ func (m *Model)renderStatusBar() string {
 	succ := m.marks.Successor(m.cursorLine)
 
 	lines := ""
-	if m.eof {
-		lines = fmt.Sprintf("Line %s/%s  Size %s bytes", sprint64(m.cursorLine + 1), sprint64(len64(m.lines)),
-			sprint64(m.fileSize))
+	if m.lines.Eof() {
+		lines = fmt.Sprintf("Line %s/%s  Size %s bytes",
+			utils.Sprint64(m.cursorLine + 1), utils.Sprint64(utils.Len64(m.lines)),
+			utils.Sprint64(m.lines.FileSize()))
 	} else {
-		lines = fmt.Sprintf("Line %s/∞  Size %s bytes ", sprint64(m.cursorLine + 1), sprint64(m.fileSize))
+		lines = fmt.Sprintf("Line %s/∞  Size %s bytes ", utils.Sprint64(m.cursorLine + 1),
+			utils.Sprint64(m.lines.FileSize()))
 	}
 
 	marks := ""
 	if pred != nil {
-		marks = marks + fmt.Sprintf("↑%s", sprint64(m.cursorLine - *pred))
+		marks = marks + fmt.Sprintf("↑%s", utils.Sprint64(m.cursorLine - *pred))
 	}
 	if cont {
 		marks = marks + "◎"
 	}
 	if succ != nil {
-		marks = marks + fmt.Sprintf("↓%s", sprint64(*succ - m.cursorLine))
+		marks = marks + fmt.Sprintf("↓%s", utils.Sprint64(*succ - m.cursorLine))
 	}
 
 	rest := fmt.Sprintf("%-*s",
@@ -808,17 +762,17 @@ func (m *Model)renderStatusBar() string {
 		if pred != nil {
 			r := m.searchRanges[i].Predecessor(SearchRange{ *pred, 0 })
 			if r != nil && *pred >= r.start && *pred < r.end {
-				sh += fmt.Sprintf("↑%s ", sprint64(m.cursorLine - *pred))
+				sh += fmt.Sprintf("↑%s ", utils.Sprint64(m.cursorLine - *pred))
 			} else {
-				sh += fmt.Sprintf("↑⋯%s ", sprint64(m.cursorLine - *pred))
+				sh += fmt.Sprintf("↑⋯%s ", utils.Sprint64(m.cursorLine - *pred))
 			}
 		}
 		if succ != nil {
 			r := m.searchRanges[i].Predecessor(SearchRange{ *succ, 0 })
 			if r != nil && *succ >= r.start && *succ < r.end {
-				sh += fmt.Sprintf("↓%s ", sprint64(*succ - m.cursorLine))
+				sh += fmt.Sprintf("↓%s ", utils.Sprint64(*succ - m.cursorLine))
 			} else {
-				sh += fmt.Sprintf("↓⋯%s ", sprint64(*succ - m.cursorLine))
+				sh += fmt.Sprintf("↓⋯%s ", utils.Sprint64(*succ - m.cursorLine))
 			}
 		}
 		sh += fmt.Sprintf("◎%d", m.searchHits[i].Count())
@@ -871,27 +825,6 @@ func (m *Model) renderSearchBar() string {
 }
 
 func (m *Model) Init() tea.Cmd {
-    go func() {
-		var counter int64 = 0
-		var lastProgress float64 = 0
-        scanner := bufio.NewScanner(m.file)
-        for scanner.Scan() {
-			s := scanner.Text()
-			if m.fileSize != math.MaxInt64 {
-				counter += int64(len(s))
-				t := float64(counter) / float64(m.fileSize)
-				if t - lastProgress > 0.001 {
-					lastProgress = t
-					m.fileReadProgress <- t
-				}
-			}
-            m.input <- s
-        }
-		m.fileReadProgress <- 1.0
-        close(m.input) // Close the channel once done reading
-		close(m.fileReadProgress)
-    }()
-
 	return nil
 }
 
@@ -1100,7 +1033,7 @@ func (m *Model) View() string {
 	ViewLogger.Info("Rendering the view from line %v, cursor %d, dimensions %dx%d",
 		current, m.cursorLine, w, h)
 
-	m.populate(current.Line + int64(h), nil)
+	m.lines.Populate(current.Line + int64(h), nil)
 
 	for i := 0; i < len(m.searches); i++ {
 		if m.searches[i].pattern != "" {
@@ -1109,7 +1042,7 @@ func (m *Model) View() string {
 	}
 
 	for h > 0 {
-		if current.Line >= len64(m.lines) {
+		if current.Line >= utils.Len64(m.lines) {
 			break
 		}
 
