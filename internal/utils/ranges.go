@@ -1,6 +1,4 @@
-package main
-
-import "github.com/alexasa79/hless/internal/utils"
+package utils
 
 type Range interface {
 	Start() int
@@ -21,11 +19,11 @@ func RangesProduct(ranges1 []Range, ranges2 []Range) []Range {
 	j := 0
 
 	if len(ranges1) > 0 {
-		cursor = utils.Min(cursor, ranges1[0].Start())
+		cursor = Min(cursor, ranges1[0].Start())
 	}
 
 	if len(ranges2) > 0 {
-		cursor = utils.Min(cursor, ranges2[0].Start())
+		cursor = Min(cursor, ranges2[0].Start())
 	}
 
 	for i < len(ranges1) && j < len(ranges2) {
@@ -56,19 +54,19 @@ func RangesProduct(ranges1 []Range, ranges2 []Range) []Range {
 				cursor = end1
 			}
 		} else if cursor >= start1 && cursor < end1 {
-			end := utils.Min(start2, end1)
+			end := Min(start2, end1)
 			res = append(res, ranges1[i].Subrange(cursor, end))
 			cursor = end
 		} else if cursor >= start2 && cursor < end2 {
-			end := utils.Min(start1, end2)
+			end := Min(start1, end2)
 			res = append(res, ranges2[j].Subrange(cursor, end))
 			cursor = end
 		} else {
-			cursor = utils.Min(start1, start2)
+			cursor = Min(start1, start2)
 		}
 	}
 
-	utils.Assert(i == len(ranges1) || j == len(ranges2))
+	Assert(i == len(ranges1) || j == len(ranges2))
 
 	if i < len(ranges1) {
 		if cursor >= ranges1[i].Start() && cursor < ranges1[i].End() {

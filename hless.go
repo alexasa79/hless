@@ -5,8 +5,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/alexasa79/hless/internal/hhlog"
 	"github.com/alexasa79/hless/internal/lines"
-	hlesslog "github.com/alexasa79/hless/internal/logging"
+	"github.com/alexasa79/hless/internal/model"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fred1268/go-clap/clap"
 )
@@ -37,10 +38,10 @@ Options:
 
 var version string = "hless version 0.0.1"
 
-var VL *hlesslog.Logger
-var SL *hlesslog.Logger
-var ML *hlesslog.Logger
-var LL *hlesslog.Logger
+var VL *hhlog.Logger
+var SL *hhlog.Logger
+var ML *hhlog.Logger
+var LL *hhlog.Logger
 
 func main() {
 	cfg := &config {
@@ -77,14 +78,14 @@ func main() {
 	defer in.Close()
 
 	if cfg.Debug != "" || cfg.Trace != "" {
-		hlesslog.SetupLogging("hless.log")
-		ML = hlesslog.NewLogger("MODEL")
-		VL = hlesslog.NewLogger("VIEW")
-		SL = hlesslog.NewLogger("SEARCH")
-		LL = hlesslog.NewLogger("LINES")
-		defer hlesslog.CleanupLogging()
+		hhlog.SetupLogging("hless.log")
+		ML = hhlog.NewLogger("MODEL")
+		VL = hhlog.NewLogger("VIEW")
+		SL = hhlog.NewLogger("SEARCH")
+		LL = hhlog.NewLogger("LINES")
+		defer hhlog.CleanupLogging()
 
-		setLevels := func(s string, newLevel hlesslog.LogLevel) {
+		setLevels := func(s string, newLevel hhlog.LogLevel) {
 			for _, level := range strings.Split(s, ",") {
 				switch level {
 				case "model": ML.MinLevel = newLevel
@@ -100,8 +101,8 @@ func main() {
 			}
 		}
 
-		setLevels(cfg.Debug, hlesslog.DEBUG)
-		setLevels(cfg.Trace, hlesslog.TRACE)
+		setLevels(cfg.Debug, hhlog.DEBUG)
+		setLevels(cfg.Trace, hhlog.TRACE)
 
 		ML.Info("Logging at level %v", SL.MinLevel)
 		VL.Info("Logging at level %v", VL.MinLevel)
@@ -109,6 +110,9 @@ func main() {
 		LL.Info("Logging at level %v", LL.MinLevel)
 
 		lines.LL = LL
+		model.ML = ML
+		model.SL = SL
+		model.VL = VL
 	}
 
 	fi, err := in.Stat()
@@ -117,7 +121,7 @@ func main() {
 		os.Exit(1)
 	}
 
-    p := tea.NewProgram(initialModel(in, fi.Size()), tea.WithAltScreen())
+    p := tea.NewProgram(model.InitialModel(in, fi.Size()), tea.WithAltScreen())
     if _, err := p.Run(); err != nil {
         fmt.Printf("Error rendering the TUI: %v", err)
         os.Exit(1)
