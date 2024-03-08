@@ -33,10 +33,12 @@ type Lines struct {
 	fileSize int64
 	eof bool
 
-	buf []byte
+	carryOverBuffer []byte
 	offset int64
 	section string
 	sectionIndex int64
+
+	batchSize int
 
 	lt *avltree.AVLTree[* Line]
 }
@@ -47,10 +49,12 @@ func NewLines(file io.ReadSeeker, fileSize int64) *Lines {
 		fileSize: fileSize,
 		eof: false,
 
-		buf: make([]byte, 0),
+		carryOverBuffer: make([]byte, 0),
 		offset: 0,
 		section: "",
 		sectionIndex: 0,
+
+		batchSize: 65536,
 
 		lt: avltree.NewAVLTree[* Line](LineComp),
 	}
@@ -70,7 +74,7 @@ func (l *Lines) readForward() {
 		return
 	}
 
-	buf := make([]byte, 65536)
+	buf := make([]byte, l.batchSize)
 	n, err := l.file.Read(buf)
 	if err != nil {
 		l.eof = true
@@ -78,7 +82,7 @@ func (l *Lines) readForward() {
 		start := int64(0)
 		i := int64(0)
 		buf = buf[:n]
-		buf = append(l.buf, buf...)
+		buf = append(l.carryOverBuffer, buf...)
 		for {
 			if i >= utils.Len64(buf) {
 				break
@@ -98,12 +102,13 @@ func (l *Lines) readForward() {
 				}
 
 				line := Line {
-					Offset: l.offset + start,
+					Offset: l.offset,
 					Text: text,
 					Name: name,
 					rawLength: i - start + 1,
 				}
 
+				l.offset += line.rawLength
 				l.lt.Insert(&line)
 
 				start = i + 1
@@ -111,9 +116,8 @@ func (l *Lines) readForward() {
 			}
 			i++
 		}
-		l.buf = buf[i:]
+		l.carryOverBuffer = buf[start:i]
 	}
-	l.offset += int64(n)
 }
 
 func (l *Lines) First() *Line {
@@ -126,15 +130,21 @@ func (l *Line) Last() *Line {
 	return nil
 }
 
-func (l *Lines) next(line *Line, iterations int) (next *Line) {
+func (l *Lines) next(line *Line, iterations int) (*Line) {
 	if iterations > 3 {
 		panic("Too many iterations trying to get next line")
 	}
 
-	next = *l.lt.Successor(line)
-	if next == nil && l.eof {
+	var next *Line = nil
+	t := l.lt.Successor(line)
+	if t == nil && l.eof {
 		return nil
 	}
+
+	if t != nil {
+		next = *t
+	}
+
 	if next == nil {
 		l.readForward()
 		return l.next(line, iterations + 1)
@@ -153,6 +163,11 @@ func (l *Lines) Next(line *Line) (next *Line) {
 }
 
 func (l *Lines) Prev(line *Line) (prev *Line) {
-	prev = *l.lt.Predecessor(line)
+	t := l.lt.Predecessor(line)
+	if t != nil {
+		prev = *t
+	} else {
+		prev = nil
+	}
 	return
 }

@@ -103,3 +103,50 @@ func TestCR(t *testing.T) {
 	utils.Assert(lines.Next(*first) == *l)
 	utils.Assert(lines.Next(*l) == nil)
 }
+
+func TestCarryOver(t *testing.T) {
+	s := "hello\nworlds\r\nfoo\n"
+	io := newStringReadSeeker(s)
+	lines := NewLines(io, int64(len(s)))
+	lines.batchSize = 2
+
+	lines.readForward()
+	search := &Line { Offset: 0 }
+	l := lines.lt.Get(search)
+	utils.Assert(l == nil)
+	utils.Assert(string(lines.carryOverBuffer) == "he")
+	lines.readForward()
+	l = lines.lt.Get(search)
+	utils.Assert(l == nil)
+	utils.Assert(string(lines.carryOverBuffer) == "hell")
+	lines.readForward()
+	l = lines.lt.Get(search)
+	utils.Assert(l != nil)
+	utils.Assert((*l).Offset == int64(0))
+	utils.Assert((*l).Text == "hello")
+	utils.Assert((*l).rawLength == 6)
+	utils.Assert((*l).Name == "1")
+
+	lines.readForward()
+	utils.Assert(string(lines.carryOverBuffer) == "wo")
+	lines.readForward()
+	utils.Assert(string(lines.carryOverBuffer) == "worl")
+	lines.readForward()
+	utils.Assert(string(lines.carryOverBuffer) == "worlds")
+	lines.readForward()
+	l2 := lines.Next(*l)
+	utils.Assert(l2 != nil)
+	utils.Assert(l2.Text == "worlds")
+	utils.Assert(l2.Name == "2")
+	utils.Assert(l2.Offset == int64(6))
+	utils.Assert(l2.rawLength == int64(8))
+
+	lines.readForward()
+	lines.readForward()
+	l2 = lines.Next(l2)
+	utils.Assert(l2 != nil)
+	utils.Assert(l2.Text == "foo")
+	utils.Assert(l2.Name == "3")
+	utils.Assert(l2.Offset == int64(14))
+	utils.Assert(l2.rawLength == int64(4))
+}

@@ -352,21 +352,21 @@ func (m *Model) onKeyDown() {
 // 	}
 // }
 
-// func (m *Model) onPageUp() {
-// 	it := Position{ m.cursorLine, 0 }
-// 	for i := 0; m.hasPrev(it) && i < m.height - 1; i++ {
-// 		it = m.prev(it)
-// 	}
-// 	m.cursorLine = it.Line
-// }
+func (m *Model) onPageUp() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasPrev(it) && i < m.height - 1; i++ {
+		it = m.prev(it)
+	}
+	m.cursorLine = it.Line
+}
 
-// func (m *Model) onPageDown() {
-// 	it := Position{ m.cursorLine, 0 }
-// 	for i := 0; m.hasNext(it) && i < m.height - 1; i++ {
-// 		it = m.next(it)
-// 	}
-// 	m.cursorLine = it.Line
-// }
+func (m *Model) onPageDown() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasNext(it) && i < m.height - 1; i++ {
+		it = m.next(it)
+	}
+	m.cursorLine = it.Line
+}
 
 // func (m *Model) onHalfPageUp() {
 // 	it := Position{ m.cursorLine, 0 }
@@ -929,13 +929,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// 	cmds = append(cmds, cmd)
 			// }
 
-			// if k == "pgup" {
-			// 	m.onPageUp()
-			// }
+			if k == "pgup" {
+				m.onPageUp()
+			}
 
-			// if k == "pgdown" || k == " " {
-			// 	m.onPageDown()
-			// }
+			if k == "pgdown" || k == " " {
+				m.onPageDown()
+			}
 
 			// if k == "f" {
 			// 	m.onHalfPageDown()
