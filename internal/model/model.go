@@ -368,21 +368,21 @@ func (m *Model) onPageDown() {
 	m.cursorLine = it.Line
 }
 
-// func (m *Model) onHalfPageUp() {
-// 	it := Position{ m.cursorLine, 0 }
-// 	for i := 0; m.hasPrev(it) && i < m.height / 2; i++ {
-// 		it = m.prev(it)
-// 	}
-// 	m.cursorLine = it.Line
-// }
+func (m *Model) onHalfPageUp() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasPrev(it) && i < m.height / 2; i++ {
+		it = m.prev(it)
+	}
+	m.cursorLine = it.Line
+}
 
-// func (m *Model) onHalfPageDown() {
-// 	it := Position{ m.cursorLine, 0 }
-// 	for i := 0; m.hasNext(it) && i < m.height / 2; i++ {
-// 		it = m.next(it)
-// 	}
-// 	m.cursorLine = it.Line
-// }
+func (m *Model) onHalfPageDown() {
+	it := Position{ m.cursorLine, 0 }
+	for i := 0; m.hasNext(it) && i < m.height / 2; i++ {
+		it = m.next(it)
+	}
+	m.cursorLine = it.Line
+}
 
 func (m *Model) onToggleMark() {
 	ML.Info("Toggling mark at position %v", m.cursorLine)
@@ -937,13 +937,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onPageDown()
 			}
 
-			// if k == "f" {
-			// 	m.onHalfPageDown()
-			// }
+			if k == "f" {
+				m.onHalfPageDown()
+			}
 
-			// if k == "b" {
-			// 	m.onHalfPageUp()
-			// }
+			if k == "b" {
+				m.onHalfPageUp()
+			}
 
 			// if k == "m" {
 			// 	m.onToggleMark()
@@ -1037,7 +1037,7 @@ func (m *Model) View() string {
 	current := m.top
 	desc := ""
 
-	VL.Info("Rendering the view from line %v, cursor %d, dimensions %dx%d",
+	VL.Info("Rendering the view from line %v, cursor %v, dimensions %dx%d",
 		current, m.cursorLine, w, h)
 
 	for i := 0; i < len(m.searches); i++ {
