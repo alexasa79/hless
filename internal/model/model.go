@@ -450,7 +450,7 @@ func (m *Model) searchScreen(search int, from *lines.Line, howMany int) *lines.L
 	curr := m.cursorLine
 	// r := SearchRange{m.cursorLine, 0}
 	for curr != nil && howMany >= 0 {
-		matches := m.searchMatches(curr.Text, m.searches[search].pattern, m.searches[search].regex)
+		matches := m.searchMatches(curr.Text(), m.searches[search].pattern, m.searches[search].regex)
 		if len(matches) > 0 {
 			m.searchHits[search].Insert(curr)
 		}
@@ -604,7 +604,7 @@ func (m *Model) normalizeView() {
 	}
 
 	if m.top.Line.Offset > m.cursorLine.Offset {
-		ML.Info("Cursor %d appears to be before top line %d", m.cursorLine, m.top.Line)
+		ML.Info("Cursor %v appears to be before top line %v", m.cursorLine, m.top.Line)
 		m.top.Line = m.cursorLine
 		m.top.Segment = 0
 		ML.Info("Fixed top line to %v", m.top)
@@ -613,7 +613,7 @@ func (m *Model) normalizeView() {
 
 	bottomLine, _ := m.bottomLine()
 	if m.cursorLine.Offset > bottomLine.Offset {
-		ML.Info("Cursor %d appears to be after bottom line %d", m.cursorLine, bottomLine)
+		ML.Info("Cursor %v appears to be after bottom line %v", m.cursorLine, bottomLine)
 		pos := Position { m.cursorLine, len(m.segmentize(m.cursorLine)) - 1 }
 		for h := m.height; m.hasPrev(pos) && h > 1; h-- {
 			pos = m.prev(pos)
@@ -623,20 +623,20 @@ func (m *Model) normalizeView() {
 	}
 }
 
-// func (m *Model) centerCursor() {
-// 	segs := m.segmentize(m.cursorLine)
+func (m *Model) centerCursor() {
+	segs := m.segmentize(m.cursorLine)
 
-// 	pos := Position {
-// 		Line: m.cursorLine,
-// 		Segment: 0,
-// 	}
-// 	for i := m.height / 2 - len(segs) / 2; m.hasPrev(pos) && i > 0; i-- {
-// 		pos = m.prev(pos)
-// 	}
+	pos := Position {
+		Line: m.cursorLine,
+		Segment: 0,
+	}
+	for i := m.height / 2 - len(segs) / 2; m.hasPrev(pos) && i > 0; i-- {
+		pos = m.prev(pos)
+	}
 
-// 	m.top = pos
-// 	m.normalizeView()
-// }
+	m.top = pos
+	m.normalizeView()
+}
 
 // func (m *Model) nextMark() {
 // 	succ := m.marks.Successor(m.cursorLine)
@@ -655,7 +655,7 @@ func (m *Model) normalizeView() {
 // }
 
 func (m *Model) segmentize(l *lines.Line) []string {
-	line := l.Text
+	line := l.Text()
 	res := make([]string, 0)
 	for line != "" {
 		l := utils.Min(m.width, len(line))
@@ -673,7 +673,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
 	segs := m.segmentize(l)
 	r0 := make([]utils.Range, 0)
 
-	line := l.Text
+	line := l.Text()
 
 	start := 0
 	for _, seg := range segs {
@@ -732,18 +732,18 @@ func (m *Model)renderStatusBar() string {
 	// 		m.cursorLine.Name, utils.Sprint64(m.lines.Nlines()),
 	// 		utils.Sprint64(m.lines.FileSize()))
 	// } else {
-		lines = fmt.Sprintf("Line %s/∞", m.cursorLine.Name)
+		lines = fmt.Sprintf("Line %s/∞", m.cursorLine.Name())
 	// }
 
 	marks := ""
 	if pred != nil {
-		marks = marks + fmt.Sprintf("↑%s", (*pred).Name)
+		marks = marks + fmt.Sprintf("↑%s", (*pred).Name())
 	}
 	if cont {
 		marks = marks + "◎"
 	}
 	if succ != nil {
-		marks = marks + fmt.Sprintf("↓%s", (*succ).Name)
+		marks = marks + fmt.Sprintf("↓%s", (*succ).Name())
 	}
 
 	rest := fmt.Sprintf("%-*s",
@@ -920,14 +920,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if k == "g" {
-				m.top = Position { m.lines.First(), 0 }
 				m.cursorLine = m.lines.First()
 			}
 
-			// if k == "G" {
-			// 	cmd = m.startProgress("Reading", m.onDocumentEnd())
-			// 	cmds = append(cmds, cmd)
-			// }
+			if k == "G" {
+				m.cursorLine = m.lines.Last()
+			}
 
 			if k == "pgup" {
 				m.onPageUp()
@@ -945,12 +943,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.onHalfPageUp()
 			}
 
+			if k == "enter" {
+				m.centerCursor()
+			}
+
 			// if k == "m" {
 			// 	m.onToggleMark()
-			// }
-
-			// if k == "enter" {
-			// 	m.centerCursor()
 			// }
 
 			// if k == "." {
