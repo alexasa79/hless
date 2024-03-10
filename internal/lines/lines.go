@@ -89,7 +89,24 @@ func NewLines(file io.ReadSeeker, fileSize int64) *Lines {
 
 		currentSection: newSection(0, ""),
 	}
+
+	lines.sections.Insert(lines.currentSection)
+
+	LL.Debug("Started new section %v", lines.currentSection)
+
 	return lines
+}
+
+func (l Line) String() string {
+	return fmt.Sprintf("[Line: @%d, len=%d, rlen=%d, index=%d, sec=%p]",
+		l.Offset, l.len, l.rawLength, l.index, l.section)
+}
+
+func (s Section) String() string {
+	return fmt.Sprintf("[Section: @%p, offset=%d, name=%s, lines=%d, buf=%d, parsed=%d,%d, index=%d,%d]",
+		&s, s.offset, s.name, s.lines, len(s.data), s.parsedStart, s.parsedEnd,
+		s.nextIndexForward, s.nextIndexBackward)
+
 }
 
 func (l *Lines) FileSize() int64 {
@@ -101,10 +118,15 @@ func (l *Lines) readForward() {
 
 	s := l.currentSection
 	l.file.Seek(s.offset + utils.Len64(s.data), io.SeekStart)
+
+	LL.Debug("Reading forward in section %v from offset %d", s, s.offset + utils.Len64(s.data))
+
 	n, err := l.file.Read(buf)
 	if err != nil {
 		return
 	}
+
+	LL.Debug("Read %d bytes", n)
 
 	s.data = append(s.data, buf[:n]...)
 	for i := s.parsedEnd; i < len(s.data); i++ {
@@ -127,8 +149,12 @@ func (l *Lines) readForward() {
 			s.lines++
 			s.nextIndexForward++
 			s.parsedEnd = i + 1
+
+			LL.Trace("Added line %v", line)
 		}
 	}
+
+	LL.Debug("Section after reading %v", s)
 }
 
 func (l *Lines) readBackward() {
@@ -141,11 +167,15 @@ func (l *Lines) readBackward() {
 	s.offset -= batchSize
 	l.file.Seek(s.offset, io.SeekStart)
 
+	LL.Debug("Reading backward in section %v from offset %d", s, s.offset)
+
 	buf := make([]byte, batchSize)
 	n, err := l.file.Read(buf)
 	if err != nil {
 		return
 	}
+
+	LL.Debug("Read %d bytes", n)
 
 	s.data = append(buf[:n], s.data...)
 	s.parsedStart += n
@@ -169,6 +199,8 @@ func (l *Lines) readBackward() {
 			s.lines++
 			s.nextIndexBackward--
 			s.parsedStart = i + 1
+
+			LL.Trace("Added line %v", line)
 		}
 	}
 
@@ -191,7 +223,11 @@ func (l *Lines) readBackward() {
 		s.lines++
 		s.nextIndexBackward--
 		s.parsedStart = 0
+
+		LL.Trace("Added line %v", line)
 	}
+
+	LL.Debug("Section after reading %v", s)
 }
 
 func (l *Lines) First() *Line {
@@ -243,7 +279,9 @@ func (l *Lines) next(line *Line, iterations int) *Line {
 }
 
 func (l *Lines) Next(line *Line) (next *Line) {
-	return l.next(line, 0)
+	next = l.next(line, 0)
+	LL.Trace("Asked for next of %v, Got %v", line, next)
+	return next
 }
 
 func (l *Lines) prev(line *Line, iterations int) *Line {
@@ -275,12 +313,20 @@ func (l *Lines) prev(line *Line, iterations int) *Line {
 }
 
 func (l *Lines) Prev(line *Line) (prev *Line) {
-	return l.prev(line, 0)
+	prev = l.prev(line, 0)
+	LL.Trace("Asked for prev of %v, Got %v", line, prev)
+	return prev
 }
 
 func (l *Lines) JumpTo(offset int64, name string) {
 	s := Section{ offset: offset }
-	t := l.sections.Predecessor(&s)
+	t := l.sections.Get(&s)
+	if t != nil {
+		l.currentSection = *t
+		return
+	}
+
+	t = l.sections.Predecessor(&s)
 	if t != nil {
 		pred := *t
 		if offset >= pred.offset && offset < pred.offset + utils.Len64(pred.data) {
@@ -293,6 +339,8 @@ func (l *Lines) JumpTo(offset int64, name string) {
 
 	l.currentSection = section
 	l.sections.Insert(section)
+
+	LL.Debug("Started new section %v", section)
 }
 
 func (l *Line) Text() string {

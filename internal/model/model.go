@@ -1078,7 +1078,7 @@ func (m *Model) View() string {
 			}
 
 			renderedLines++
-			desc = desc + fmt.Sprintf("%v ", current)
+			desc = desc + fmt.Sprintf("%d ", current.Line.Offset)
 			h -= 1
 		}
 

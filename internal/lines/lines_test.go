@@ -227,3 +227,14 @@ func TestReadBackward2(t *testing.T) {
 	utils.Assert(l2.len == 2)
 	utils.Assert(l2.rawLength == 4)
 }
+
+func TestJumpTo(t *testing.T) {
+	s := "01\n345\n"
+	utils.Assert(len(s) == 7)
+	io := newStringReadSeeker(s)
+	lines := NewLines(io, int64(len(s)))
+	lines.batchSize = 2
+	lines.JumpTo(0, "")
+
+	utils.Assert(lines.sections.Count() == 1)
+}
