@@ -638,21 +638,21 @@ func (m *Model) centerCursor() {
 	m.normalizeView()
 }
 
-// func (m *Model) nextMark() {
-// 	succ := m.marks.Successor(m.cursorLine)
-// 	if succ != nil {
-// 		m.cursorLine = *succ
-// 		m.centerCursor()
-// 	}
-// }
+func (m *Model) nextMark() {
+	succ := m.marks.Successor(m.cursorLine)
+	if succ != nil {
+		m.cursorLine = *succ
+		m.centerCursor()
+	}
+}
 
-// func (m *Model) prevMark() {
-// 	pred := m.marks.Predecessor(m.cursorLine)
-// 	if pred != nil {
-// 		m.cursorLine = *pred
-// 		m.centerCursor()
-// 	}
-// }
+func (m *Model) prevMark() {
+	pred := m.marks.Predecessor(m.cursorLine)
+	if pred != nil {
+		m.cursorLine = *pred
+		m.centerCursor()
+	}
+}
 
 func (m *Model) segmentize(l *lines.Line) []string {
 	line := l.Text()
@@ -726,30 +726,39 @@ func (m *Model)renderStatusBar() string {
 	pred := m.marks.Predecessor(m.cursorLine)
 	succ := m.marks.Successor(m.cursorLine)
 
-	lines := ""
+	ll := ""
 	// if m.lines.Eof() {
 	// 	lines = fmt.Sprintf("Line %s/%s  Size %s bytes",
 	// 		m.cursorLine.Name, utils.Sprint64(m.lines.Nlines()),
 	// 		utils.Sprint64(m.lines.FileSize()))
 	// } else {
-		lines = fmt.Sprintf("Line %s/∞", m.cursorLine.Name())
+		ll = fmt.Sprintf("Line %s/∞ ", m.cursorLine.Name())
 	// }
 
-	marks := ""
+	ms := make([]string, 0)
 	if pred != nil {
-		marks = marks + fmt.Sprintf("↑%s", (*pred).Name())
+		dist := lines.Distance(*pred, m.cursorLine)
+		if dist == "" {
+			dist = fmt.Sprintf("%s⋯", (*pred).Name())
+		}
+		ms = append(ms, fmt.Sprintf("↑%s", dist))
 	}
 	if cont {
-		marks = marks + "◎"
+		ms = append(ms, "◎")
 	}
 	if succ != nil {
-		marks = marks + fmt.Sprintf("↓%s", (*succ).Name())
+		dist := lines.Distance(m.cursorLine, *succ)
+		if dist == "" {
+			dist = fmt.Sprintf("⋯%s", (*succ).Name())
+		}
+		ms = append(ms, fmt.Sprintf("%s↓", dist))
 	}
+	marks := strings.Join(ms, " ")
 
 	rest := fmt.Sprintf("%-*s",
-		m.width - (utf8.RuneCountInString(lines) + utf8.RuneCountInString(marks)), "")
+		m.width - (utf8.RuneCountInString(ll) + utf8.RuneCountInString(marks)), "")
 
-	st1 := m.statusStyle.Render(lines)
+	st1 := m.statusStyle.Render(ll)
 	st1 += m.markStyle.Render(marks)
 	st1 += m.statusStyle.Render(rest)
 
@@ -947,17 +956,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.centerCursor()
 			}
 
-			// if k == "m" {
-			// 	m.onToggleMark()
-			// }
+			if k == "m" {
+				m.onToggleMark()
+			}
 
-			// if k == "." {
-			// 	m.nextMark()
-			// }
+			if k == "." {
+				m.nextMark()
+			}
 
-			// if k == "," {
-			// 	m.prevMark()
-			// }
+			if k == "," {
+				m.prevMark()
+			}
 
 			// if k == "/" || k == "?" {
 			// 	m.activeSearchTextbox = true

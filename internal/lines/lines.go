@@ -358,3 +358,10 @@ func (l *Line) Name() string {
 	t := fmt.Sprintf("%s%+d", s.name, l.index)
 	return t
 }
+
+func Distance(l1, l2 *Line) string {
+	if l1.section == l2.section {
+		return fmt.Sprintf("%d", l2.index - l1.index)
+	}
+	return ""
+}
