@@ -33,7 +33,7 @@ type SearchResult struct {
 }
 
 type SearchRange struct {
-	start *lines.Line
+	start int64
 	end int64
 }
 
@@ -93,7 +93,7 @@ type Model struct {
 
 	searches [9]Search
 	searchHits [9]*avltree.AVLTree[*lines.Line]
-	// searchRanges [9]*avltree.AVLTree[SearchRange]
+	searchRanges [9]*avltree.AVLTree[SearchRange]
 	search int
 
 	inProgress bool
@@ -142,7 +142,7 @@ func int64Comp(a, b int64) int {
 }
 
 func searchRangeComp(a, b SearchRange) int {
-	return int64Comp(a.start.Offset, b.start.Offset)
+	return int64Comp(a.start, b.start)
 }
 
 func InitialModel(f io.ReadSeeker, size int64) *Model {
@@ -183,7 +183,7 @@ func InitialModel(f io.ReadSeeker, size int64) *Model {
 
 		searches: [9] Search {},
 		searchHits: [9] *avltree.AVLTree[*lines.Line]{},
-		// searchRanges: [9] *avltree.AVLTree[SearchRange]{},
+		searchRanges: [9] *avltree.AVLTree[SearchRange]{},
 
 		textbox: textinput.New(),
 	}
@@ -196,6 +196,9 @@ func InitialModel(f io.ReadSeeker, size int64) *Model {
 			regex: false,
 			pattern: "",
 		}
+		m.searchHits[i] = avltree.NewAVLTree(lines.LineComp)
+		m.searchRanges[i] = avltree.NewAVLTree(searchRangeComp)
+
 	}
 
 	return &m
@@ -309,48 +312,13 @@ func (m *Model) onKeyDown() {
 	}
 }
 
-// func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
-// 	m.progressInterrupt = make(chan bool)
-// 	m.inProgress = true
-// 	m.progressPrompt = prompt
-// 	m.progressCmd = progressCmd
-// 	return progressCmd
-// }
-
-// func (m *Model) onDocumentEnd() tea.Cmd {
-// 	return func() tea.Msg {
-// 		prog, interrupted := m.lines.Populate(math.MaxInt64, m.progressInterrupt)
-// 		if !interrupted && m.lines.Eof() {
-// 			h := m.height
-
-// 			m.cursorLine = m.lines.Nlines() - 1
-// 			line := m.lines.Nlines() - 1
-
-// 			var segs []string
-// 			for {
-// 				segs = m.segmentize(line)
-// 				if h > len(segs) {
-// 					h -= len(segs)
-// 					line--
-// 				} else {
-// 					break
-// 				}
-// 			}
-
-// 			m.top.Line = line
-// 			m.top.Segment = len(segs) - h
-// 			return ProgressReport {
-// 				progress: prog,
-// 				interrupted: true,
-// 			}
-// 		} else {
-// 			return ProgressReport {
-// 				progress: prog,
-// 				interrupted: interrupted,
-// 			}
-// 		}
-// 	}
-// }
+func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
+	m.progressInterrupt = make(chan bool)
+	m.inProgress = true
+	m.progressPrompt = prompt
+	m.progressCmd = progressCmd
+	return progressCmd
+}
 
 func (m *Model) onPageUp() {
 	it := Position{ m.cursorLine, 0 }
@@ -419,181 +387,221 @@ func (m *Model) searchMatches(line string, pat string, regex bool) []SearchResul
 	return res
 }
 
-// func (m *Model) updateSearchRange(search int, r SearchRange) {
-// 	if r.end == r.start {
-// 		return
-// 	}
+func (m *Model) updateSearchRange(search int, r SearchRange) {
+	if r.end == r.start {
+		return
+	}
 
-// 	tree := m.searchRanges[search]
-// 	t := tree.Get(r)
-// 	if t != nil {
-// 		r.end = utils.Max(t.end, r.end)
-// 		if r.start != t.start || r.end != t.end {
-// 			tree.Remove(r)
-// 			tree.Insert(r)
-// 		}
-// 	} else {
-// 		pred := tree.Predecessor(r)
-// 		if pred != nil {
-// 			// Ranges intersect
-// 			if pred.start <= r.end && r.start <= pred.end {
-// 				r.start = utils.Min(r.start, pred.start)
-// 				r.end = utils.Max(r.end, pred.end)
-// 				tree.Remove(*pred)
-// 			}
-// 		}
-// 		tree.Insert(r)
-// 	}
-// }
+	SL.Trace("Updating search range %v", r)
+
+	tree := m.searchRanges[search]
+	t := tree.Get(r)
+	if t != nil {
+		if t.end > r.end {
+			r.end = t.end
+		}
+
+		if r.start != t.start || r.end != t.end {
+			tree.Remove(r)
+			tree.Insert(r)
+			SL.Trace("New range %v", r)
+		}
+	} else {
+		pred := tree.Predecessor(r)
+		if pred != nil {
+			// Ranges intersect
+			if pred.start <= r.end && r.start <= pred.end {
+				if r.start < pred.start {
+					r.start = pred.start
+				}
+
+				if pred.end > r.end {
+					r.end = pred.end
+				}
+				tree.Remove(*pred)
+				SL.Trace("Removed range %v", *pred)
+			}
+		}
+		SL.Trace("Insert range %v", r)
+		tree.Insert(r)
+	}
+}
 
 func (m *Model) searchScreen(search int, from *lines.Line, howMany int) *lines.Line {
 	curr := m.cursorLine
-	// r := SearchRange{m.cursorLine, 0}
+	r := SearchRange{from.Offset, 0}
 	for curr != nil && howMany >= 0 {
 		matches := m.searchMatches(curr.Text(), m.searches[search].pattern, m.searches[search].regex)
 		if len(matches) > 0 {
 			m.searchHits[search].Insert(curr)
 		}
 		curr = m.lines.Next(curr)
+		howMany--
 	}
 
-	// r.end = curr
-	// m.updateSearchRange(search, r)
+	if curr == nil {
+		r.end = m.lines.FileSize()
+	} else {
+		r.end = curr.Offset
+	}
 
-	// if curr < m.lines.Nlines() {
-	// 	return curr
-	// } else {
-	// 	return m.cursorLine
-	// }
-	return curr
+	m.updateSearchRange(search, r)
+
+	if curr != nil {
+		return curr
+	} else {
+		return m.cursorLine
+	}
 }
 
-// func (m *Model) findNextWithProgress(search int) tea.Cmd {
-// 	searchLine := m.cursorLine + int64(1)
-// 	lastProgress := float64(0)
-// 	return func() tea.Msg {
-// 		// One of two things can happen. Either we already read to the end of the file.
-// 		// In this case we set the progress based on the current search line out of total
-// 		// number of lines. Or we did not yet reach the end of the file. In this case
-// 		// we set the progress to be the progress returned by populate()
-// 		batch := int64(100000)
-// 		var prog float64 = 0
-// 		interrupted := false
-// 		r := SearchRange{searchLine, 0}
-// 		if m.lines.Nlines() - searchLine < batch {
-// 			prog, interrupted = m.lines.Populate(math.MaxInt64, m.progressInterrupt)
-// 		}
+func (m *Model) findNextWithProgress(search int) tea.Cmd {
+	searchLine := m.lines.Next(m.cursorLine)
+	if searchLine == nil {
+		return nil
+	}
+	lastProgress := float64(0)
 
-// 		if !interrupted {
-// 			select {
-// 			case interrupted = <- m.progressInterrupt:
-// 				break
-// 			default:
-// 				found := false
-// 				for searchLine < m.lines.Nlines() && batch > 0 {
-// 					matches := m.searchMatches(m.lines.Nth(searchLine),
-// 						m.searches[search].pattern, m.searches[search].regex)
-// 					if len(matches) > 0 {
-// 						m.searchHits[search].Insert(searchLine)
-// 						found = true
-// 						break
-// 					}
-// 					searchLine++
-// 					batch--
-// 				}
+	SL.Info("Searching forward from %v", searchLine)
 
-// 				if found {
-// 					interrupted = true
-// 					m.cursorLine = searchLine
-// 				} else if m.lines.Eof() {
-// 					prog = float64(searchLine) / float64(m.lines.Nlines())
-// 					if searchLine == m.lines.Nlines() {
-// 						interrupted = true
-// 					}
-// 				}
-// 			}
-// 		}
+	return func() tea.Msg {
+		SL.Debug("Callback called for %v", searchLine)
 
-// 		prog = utils.Max(prog, lastProgress)
-// 		lastProgress = prog
+		// One of two things can happen. Either we already read to the end of the file.
+		// In this case we set the progress based on the current search line out of total
+		// number of lines. Or we did not yet reach the end of the file. In this case
+		// we set the progress to be the progress returned by populate()
+		batch := int64(100000)
+		var prog float64 = 0
+		interrupted := false
+		r := SearchRange{searchLine.Offset, 0}
 
-// 		r.end = searchLine
-// 		m.updateSearchRange(search, r)
+		if !interrupted {
+			select {
+			case interrupted = <- m.progressInterrupt:
+				break
+			default:
+				found := false
+				for searchLine != nil && batch > 0 {
+					matches := m.searchMatches(searchLine.Text(),
+						m.searches[search].pattern, m.searches[search].regex)
+					if len(matches) > 0 {
+						m.searchHits[search].Insert(searchLine)
+						found = true
+						break
+					}
+					searchLine = m.lines.Next(searchLine)
+					batch--
+				}
 
-// 		return ProgressReport {
-// 			progress: prog,
-// 			interrupted: interrupted,
-// 		}
-// 	}
-// }
+				if found {
+					interrupted = true
+					m.cursorLine = searchLine
+				} else {
+					if searchLine == nil {
+						prog = 1.0
+						interrupted = true
+					} else {
+						prog = float64(searchLine.Offset) / float64(m.lines.FileSize())
+					}
+				}
+			}
+		}
 
-// func (m *Model) findPrevWithProgress(search int) tea.Cmd {
-// 	searchLine := m.cursorLine - int64(1)
-// 	startingPosition := searchLine
-// 	lastProgress := float64(0)
+		prog = utils.Max(prog, lastProgress)
+		lastProgress = prog
 
-// 	SL.Info("Searching backwards from %v", searchLine)
+		if searchLine != nil {
+			r.end = searchLine.Offset
+		} else {
+			r.end = m.lines.FileSize()
+		}
+		m.updateSearchRange(search, r)
 
-// 	return func() tea.Msg {
-// 		SL.Debug("Callback called for %v", searchLine)
+		res := ProgressReport {
+			progress: prog,
+			interrupted: interrupted,
+		}
 
-// 		// One of two things can happen. Either we already read to the end of the file.
-// 		// In this case we set the progress based on the current search line out of total
-// 		// number of lines. Or we did not yet reach the end of the file. In this case
-// 		// we set the progress to be the progress returned by populate()
-// 		batch := int64(10000)
-// 		var prog float64 = 0
-// 		interrupted := false
-// 		r := SearchRange{searchLine, 0}
-// 		select {
-// 		case interrupted = <- m.progressInterrupt:
-// 			break
-// 		default:
-// 			found := false
-// 			for searchLine >= 0 && batch > 0 {
-// 				SL.Trace("Checking line %v for match", searchLine)
+		SL.Debug("Returning progress report %v", res)
 
-// 				matches := m.searchMatches(m.lines.Nth(searchLine),
-// 					m.searches[search].pattern, m.searches[search].regex)
-// 				if len(matches) > 0 {
-// 					m.searchHits[search].Insert(searchLine)
-// 					found = true
-// 					SL.Debug("Line %v matches", searchLine)
-// 					break
-// 				}
-// 				searchLine--
-// 				batch--
-// 			}
+		return res
+	}
+}
 
-// 			if found {
-// 				interrupted = true
-// 				m.cursorLine = searchLine
-// 			} else if searchLine < 0 {
-// 				prog = 1
-// 				if searchLine < 0 {
-// 					interrupted = true
-// 				}
-// 			} else {
-// 				prog = 1 - (float64(searchLine + 1) / float64(startingPosition))
-// 			}
-// 		}
+func (m *Model) findPrevWithProgress(search int) tea.Cmd {
+	searchLine := m.lines.Prev(m.cursorLine)
+	if searchLine == nil {
+		return nil
+	}
+	lastProgress := float64(0)
 
-// 		prog = utils.Max(prog, lastProgress)
-// 		lastProgress = prog
+	SL.Info("Searching backwards from %v", searchLine)
 
-// 		r.end = searchLine
-// 		m.updateSearchRange(search, r)
+	return func() tea.Msg {
+		SL.Debug("Callback called for %v", searchLine)
 
-// 		res := ProgressReport {
-// 			progress: prog,
-// 			interrupted: interrupted,
-// 		}
+		// One of two things can happen. Either we already read to the end of the file.
+		// In this case we set the progress based on the current search line out of total
+		// number of lines. Or we did not yet reach the end of the file. In this case
+		// we set the progress to be the progress returned by populate()
+		batch := int64(10000)
+		var prog float64 = 0
+		interrupted := false
+		r := SearchRange{searchLine.Offset, 0}
+		select {
+		case interrupted = <- m.progressInterrupt:
+			break
+		default:
+			found := false
+			for searchLine != nil && batch > 0 {
+				SL.Trace("Checking line %v for match", searchLine)
 
-// 		SL.Debug("Returning progress report %v", res)
+				matches := m.searchMatches(searchLine.Text(),
+					m.searches[search].pattern, m.searches[search].regex)
+				if len(matches) > 0 {
+					m.searchHits[search].Insert(searchLine)
+					found = true
+					SL.Debug("Line %v matches", searchLine)
+					break
+				}
+				searchLine = m.lines.Prev(searchLine)
+				batch--
+			}
 
-// 		return res
-// 	}
-// }
+			if found {
+				interrupted = true
+				m.cursorLine = searchLine
+			} else {
+				if searchLine == nil {
+					prog = 1.0
+					interrupted = true
+				} else {
+					prog = 1 - (float64(searchLine.Offset) / float64(m.lines.FileSize()))
+				}
+			}
+		}
+
+		prog = utils.Max(prog, lastProgress)
+		lastProgress = prog
+
+		if searchLine == nil {
+			r.end = m.lines.FileSize()
+		} else {
+			r.end = searchLine.Offset
+		}
+
+		m.updateSearchRange(search, r)
+
+		res := ProgressReport {
+			progress: prog,
+			interrupted: interrupted,
+		}
+
+		SL.Debug("Returning progress report %v", res)
+
+		return res
+	}
+}
 
 /// Given current position of the cursor, make sure it is visible.
 /// This is needed in cases when change of terminal's size causes the cursor
@@ -764,35 +772,35 @@ func (m *Model)renderStatusBar() string {
 
 	st2 := m.statusStyle.Render("")
 
-	// for i := 0; i < len(m.searches); i++ {
-	// 	if m.searches[i].pattern == "" {
-	// 		continue
-	// 	}
+	for i := 0; i < len(m.searches); i++ {
+		if m.searches[i].pattern == "" {
+			continue
+		}
 
-	// 	pred = m.searchHits[i].Predecessor(m.cursorLine)
-	// 	succ = m.searchHits[i].Successor(m.cursorLine)
+		pred = m.searchHits[i].Predecessor(m.cursorLine)
+		succ = m.searchHits[i].Successor(m.cursorLine)
 
-	// 	sh := ""
-	// 	if pred != nil {
-	// 		r := m.searchRanges[i].Predecessor(SearchRange{ *pred, 0 })
-	// 		if r != nil && *pred >= r.start && *pred < r.end {
-	// 			sh += fmt.Sprintf("↑%s ", utils.Sprint64(m.cursorLine - *pred))
-	// 		} else {
-	// 			sh += fmt.Sprintf("↑⋯%s ", utils.Sprint64(m.cursorLine - *pred))
-	// 		}
-	// 	}
-	// 	if succ != nil {
-	// 		r := m.searchRanges[i].Predecessor(SearchRange{ *succ, 0 })
-	// 		if r != nil && *succ >= r.start && *succ < r.end {
-	// 			sh += fmt.Sprintf("↓%s ", utils.Sprint64(*succ - m.cursorLine))
-	// 		} else {
-	// 			sh += fmt.Sprintf("↓⋯%s ", utils.Sprint64(*succ - m.cursorLine))
-	// 		}
-	// 	}
-	// 	sh += fmt.Sprintf("◎%d", m.searchHits[i].Count())
+		sh := ""
+		if pred != nil {
+			r := m.searchRanges[i].Predecessor(SearchRange{ (*pred).Offset, 0 })
+			if r != nil && (*pred).Offset >= r.start && (*pred).Offset < r.end {
+				sh += fmt.Sprintf("↑%s ", lines.Distance(*pred, m.cursorLine))
+			} else {
+				sh += fmt.Sprintf("↑⋯%s ", lines.Distance(*pred, m.cursorLine))
+			}
+		}
+		if succ != nil {
+			r := m.searchRanges[i].Predecessor(SearchRange{ (*succ).Offset, 0 })
+			if r != nil && (*succ).Offset >= r.start && (*succ).Offset < r.end {
+				sh += fmt.Sprintf("↓%s ", lines.Distance(m.cursorLine, *succ))
+			} else {
+				sh += fmt.Sprintf("↓⋯%s ", lines.Distance(m.cursorLine, *succ))
+			}
+		}
+		sh += fmt.Sprintf("◎%d", m.searchHits[i].Count())
 
-	// 	st2 += m.searchStyles[i].Render(sh)
-	// }
+		st2 += m.searchStyles[i].Render(sh)
+	}
 
 	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 
@@ -844,7 +852,7 @@ func (m *Model) Init() tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := make([]tea.Cmd, 0)
-	// var cmd tea.Cmd
+	var cmd tea.Cmd
 
 	ML.Info("Got request %v %v", reflect.TypeOf(msg), msg)
 
@@ -853,60 +861,60 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		k := msg.String()
 
 		if m.activeSearchTextbox {
-			// if k == "enter" {
-			// 	m.activeSearchTextbox = false
-			// 	m.textbox.Blur()
-			// 	m.newSearch.pattern = m.textbox.Value()
-			// 	if m.newSearch.pattern != m.searches[m.search].pattern ||
-			// 		m.newSearch.regex != m.searches[m.search].regex {
-			// 		m.searches[m.search] = m.newSearch
-			// 		m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
-			// 		// m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
-			// 	}
+			if k == "enter" {
+				m.activeSearchTextbox = false
+				m.textbox.Blur()
+				m.newSearch.pattern = m.textbox.Value()
+				if m.newSearch.pattern != m.searches[m.search].pattern ||
+					m.newSearch.regex != m.searches[m.search].regex {
+					m.searches[m.search] = m.newSearch
+					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
+					// m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+				}
 
-			// 	if m.activeSearchDirectionDown {
-			// 		cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
-			// 		cmds = append(cmds, cmd)
-			// 	} else {
-			// 		cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
-			// 		cmds = append(cmds, cmd)
-			// 	}
-			// } else if k == "tab" {
-			// 	m.newSearch.regex = !m.newSearch.regex
-			// } else if k == "esc" || k == "ctrl+c" {
-			// 	m.textbox.SetValue(m.searches[m.search].pattern)
-			// 	m.activeSearchTextbox = false
-			// 	m.textbox.Blur()
-			// } else if k == "ctrl+l" || k == "f4" {
-			// 	if m.newSearch.pattern != m.searches[m.search].pattern ||
-			// 		m.newSearch.regex != m.searches[m.search].regex {
-			// 		m.searches[m.search] = m.newSearch
-			// 		m.searchHits[m.search] = avltree.NewAVLTree(int64Comp)
-			// 		m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
-			// 	}
-			// 	if m.search < len(m.searches) - 1 {
-			// 		m.search++
-			// 		m.newSearch = m.searches[m.search]
-			// 		m.textbox.SetValue(m.newSearch.pattern)
-			// 	}
-			// } else if k == "ctrl+h" || k == "f2" {
-			// 	if m.newSearch.pattern != m.searches[m.search].pattern ||
-			// 		m.newSearch.regex != m.searches[m.search].regex {
-			// 		m.searches[m.search] = m.newSearch
-			// 		m.searchHits[m.search] = avltree.NewAVLTree(int64Comp)
-			// 		m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
-			// 		m.textbox.SetCursor(len(m.newSearch.pattern))
-			// 	}
-			// 	if m.search > 0 {
-			// 		m.search--
-			// 		m.newSearch = m.searches[m.search]
-			// 		m.textbox.SetValue(m.newSearch.pattern)
-			// 		m.textbox.SetCursor(len(m.newSearch.pattern))
-			// 	}
-			// } else {
-			// 	m.textbox, cmd = m.textbox.Update(msg)
-			// 	cmds = append(cmds, cmd)
-			// }
+				if m.activeSearchDirectionDown {
+					cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+					cmds = append(cmds, cmd)
+				} else {
+					cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+					cmds = append(cmds, cmd)
+				}
+			} else if k == "tab" {
+				m.newSearch.regex = !m.newSearch.regex
+			} else if k == "esc" || k == "ctrl+c" {
+				m.textbox.SetValue(m.searches[m.search].pattern)
+				m.activeSearchTextbox = false
+				m.textbox.Blur()
+			} else if k == "ctrl+l" || k == "f4" {
+				if m.newSearch.pattern != m.searches[m.search].pattern ||
+					m.newSearch.regex != m.searches[m.search].regex {
+					m.searches[m.search] = m.newSearch
+					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
+					// m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+				}
+				if m.search < len(m.searches) - 1 {
+					m.search++
+					m.newSearch = m.searches[m.search]
+					m.textbox.SetValue(m.newSearch.pattern)
+				}
+			} else if k == "ctrl+h" || k == "f2" {
+				if m.newSearch.pattern != m.searches[m.search].pattern ||
+					m.newSearch.regex != m.searches[m.search].regex {
+					m.searches[m.search] = m.newSearch
+					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
+					// m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+					m.textbox.SetCursor(len(m.newSearch.pattern))
+				}
+				if m.search > 0 {
+					m.search--
+					m.newSearch = m.searches[m.search]
+					m.textbox.SetValue(m.newSearch.pattern)
+					m.textbox.SetCursor(len(m.newSearch.pattern))
+				}
+			} else {
+				m.textbox, cmd = m.textbox.Update(msg)
+				cmds = append(cmds, cmd)
+			}
 		} else {
 			if k == "q" || k == "ctrl+c" {
 				if k == "ctrl+c" && m.inProgress {
@@ -968,28 +976,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.prevMark()
 			}
 
-			// if k == "/" || k == "?" {
-			// 	m.activeSearchTextbox = true
-			// 	cmds = append(cmds, m.textbox.Focus())
-			// 	cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
-			// 	if k == "/" {
-			// 		m.activeSearchDirectionDown = true
-			// 	}
+			if k == "/" || k == "?" {
+				m.activeSearchTextbox = true
+				cmds = append(cmds, m.textbox.Focus())
+				cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
+				if k == "/" {
+					m.activeSearchDirectionDown = true
+				}
 
-			// 	if k == "?" {
-			// 		m.activeSearchDirectionDown = false
-			// 	}
-			// }
+				if k == "?" {
+					m.activeSearchDirectionDown = false
+				}
+			}
 
-			// if k == "n" {
-			// 	cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
-			// 	cmds = append(cmds, cmd)
-			// }
+			if k == "n" {
+				cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+				cmds = append(cmds, cmd)
+			}
 
-			// if k == "N" {
-			// 	cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
-			// 	cmds = append(cmds, cmd)
-			// }
+			if k == "N" {
+				cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+				cmds = append(cmds, cmd)
+			}
 
 			// if search, ok := searchForwardRunes[k]; ok {
 			// 	if m.searches[search].pattern != "" {

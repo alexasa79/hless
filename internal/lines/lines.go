@@ -255,6 +255,10 @@ func (l *Lines) next(line *Line, iterations int) *Line {
 		return nil
 	}
 
+	if line.Offset + int64(line.rawLength) >= l.fileSize {
+		return nil
+	}
+
 	var next *Line = nil
 	t := l.lines.Successor(line)
 	if t == nil && l.eof {
@@ -286,6 +290,10 @@ func (l *Lines) Next(line *Line) (next *Line) {
 
 func (l *Lines) prev(line *Line, iterations int) *Line {
 	if iterations > 3 {
+		return nil
+	}
+
+	if line.Offset == 0 {
 		return nil
 	}
 
