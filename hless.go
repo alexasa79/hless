@@ -121,9 +121,10 @@ func main() {
 		os.Exit(1)
 	}
 
-    p := tea.NewProgram(model.InitialModel(in, fi.Size()), tea.WithAltScreen())
-    if _, err := p.Run(); err != nil {
-        fmt.Printf("Error rendering the TUI: %v", err)
-        os.Exit(1)
-    }
+	p := tea.NewProgram(model.InitialModel(in, fi.Size()), tea.WithAltScreen())
+	defer tea.ClearScreen()
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error rendering the TUI: %v", err)
+		os.Exit(1)
+	}
 }
