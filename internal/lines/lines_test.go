@@ -228,6 +228,55 @@ func TestReadBackward2(t *testing.T) {
 	utils.Assert(l2.rawLength == 4)
 }
 
+func TestBackAndForth(t *testing.T) {
+	s := "012\n34\n"
+	utils.Assert(len(s) == 7)
+	io := newStringReadSeeker(s)
+	lines := NewLines(io, int64(len(s)))
+	lines.batchSize = 2
+
+	lines.readForward()
+	utils.Assert(lines.lines.Count() == 0)
+
+	lines.JumpTo(7, "end")
+	lines.readBackward()
+	utils.Assert(lines.lines.Count() == 0)
+	lines.readBackward()
+	utils.Assert(lines.lines.Count() == 1)
+	l2 := lines.Last()
+	utils.Assert(l2.Offset == 4)
+	utils.Assert(l2.Name() == "end-1")
+
+	l1 := lines.Prev(l2)
+	utils.Assert(l1 != nil)
+}
+
+func TestBackAndForth2(t *testing.T) {
+	s := "01\n23\n34\n"
+	utils.Assert(len(s) == 9)
+	io := newStringReadSeeker(s)
+	lines := NewLines(io, int64(len(s)))
+	lines.batchSize = 2
+
+	lines.readForward()
+	lines.readForward()
+	utils.Assert(lines.lines.Count() == 1)
+
+	lines.JumpTo(9, "end")
+	lines.readBackward()
+	lines.readBackward()
+
+	l3 := lines.Last()
+	utils.Assert(l3.Offset == 6)
+	utils.Assert(l3.Name() == "end-1")
+	l2 := lines.Prev(l3)
+	utils.Assert(l2.Offset == 3)
+	utils.Assert(l2.Name() == "end-2")
+	l1 := lines.Prev(l2)
+	utils.Assert(l1.Offset == 0)
+	utils.Assert(l1.Name() == "1")
+}
+
 func TestJumpTo(t *testing.T) {
 	s := "01\n345\n"
 	utils.Assert(len(s) == 7)

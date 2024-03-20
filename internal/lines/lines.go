@@ -251,7 +251,9 @@ func (l *Lines) Last() *Line {
 }
 
 func (l *Lines) next(line *Line, iterations int) *Line {
-	if iterations > 3 {
+	// This is a mere protection against bugs. We should be able to iterate as many times as we
+	// need.
+	if iterations > 100 {
 		return nil
 	}
 
@@ -289,7 +291,9 @@ func (l *Lines) Next(line *Line) (next *Line) {
 }
 
 func (l *Lines) prev(line *Line, iterations int) *Line {
-	if iterations > 3 {
+	// This is a mere protection against bugs. We should be able to iterate as many times as we
+	// need.
+	if iterations > 100 {
 		return nil
 	}
 
@@ -299,10 +303,6 @@ func (l *Lines) prev(line *Line, iterations int) *Line {
 
 	var prev *Line = nil
 	t := l.lines.Predecessor(line)
-	if t == nil && l.eof {
-		return nil
-	}
-
 	if t != nil {
 		prev = *t
 	}
@@ -315,7 +315,7 @@ func (l *Lines) prev(line *Line, iterations int) *Line {
 			return prev
 		} else {
 			l.readBackward()
-			return l.next(line, iterations + 1)
+			return l.prev(line, iterations + 1)
 		}
 	}
 }
