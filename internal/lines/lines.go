@@ -369,7 +369,12 @@ func (l *Line) Name() string {
 
 func Distance(l1, l2 *Line) string {
 	if l1.section == l2.section {
-		return fmt.Sprintf("%d", l2.index - l1.index)
+		dist := l2.index - l1.index
+		if dist < 0 {
+			dist *= -1
+		}
+		return fmt.Sprintf("%d", dist)
+	} else {
+		return "⋯" + l1.Name()
 	}
-	return ""
 }

@@ -18,33 +18,41 @@ import (
 )
 
 type Position struct {
-	Line *lines.Line
+	Line    *lines.Line
 	Segment int
 }
 
 type Search struct {
-	regex bool
+	regex   bool
 	pattern string
 }
 
 type SearchResult struct {
 	start int
-	end int
+	end   int
 }
 
 type SearchRange struct {
 	start int64
-	end int64
+	end   int64
+}
+
+type SearchHistory struct {
+	Search []string
+}
+
+type History struct {
+	Searches [9]SearchHistory
 }
 
 type CegmentRange struct {
 	start int
-	end int
+	end   int
 	style *lipgloss.Style
 }
 
 type ProgressReport struct {
-	progress float64
+	progress    float64
 	interrupted bool
 }
 
@@ -57,13 +65,13 @@ func (c CegmentRange) End() int {
 }
 
 func (c CegmentRange) Subrange(start int, end int) utils.Range {
-	return CegmentRange{ start: start, end: end, style: c.style }
+	return CegmentRange{start: start, end: end, style: c.style}
 }
 
 /// Colored segment of a string
 type Cegment struct {
 	subsegments []string
-	style []*lipgloss.Style
+	style       []*lipgloss.Style
 }
 
 type Model struct {
@@ -73,34 +81,36 @@ type Model struct {
 
 	marks *avltree.AVLTree[*lines.Line]
 
-	top Position
+	top        Position
 	cursorLine *lines.Line
 
-	width int
+	width  int
 	height int
 
 	defaultStyle lipgloss.Style
-	cursorStyle lipgloss.Style
-	statusStyle lipgloss.Style
-	markStyle lipgloss.Style
+	cursorStyle  lipgloss.Style
+	statusStyle  lipgloss.Style
+	markStyle    lipgloss.Style
 
 	searchStyles [9]lipgloss.Style
 
-	activeSearchTextbox bool
+	activeSearchTextbox       bool
 	activeSearchDirectionDown bool
-	textbox textinput.Model
-	newSearch Search
+	textbox                   textinput.Model
+	newSearch                 Search
 
-	searches [9]Search
-	searchHits [9]*avltree.AVLTree[*lines.Line]
+	searches     [9]Search
+	searchHits   [9]*avltree.AVLTree[*lines.Line]
 	searchRanges [9]*avltree.AVLTree[SearchRange]
-	search int
+	search       int
 
-	inProgress bool
-	currentProgress float64
+	inProgress        bool
+	currentProgress   float64
 	progressInterrupt chan bool
-	progressCmd tea.Cmd
-	progressPrompt string
+	progressCmd       tea.Cmd
+	progressPrompt    string
+
+	History History
 }
 
 var ML *hhlog.Logger
@@ -146,12 +156,12 @@ func searchRangeComp(a, b SearchRange) int {
 }
 
 func InitialModel(f io.ReadSeeker, size int64) *Model {
-	m := Model {
+	m := Model{
 		ready: false,
 
 		lines: lines.NewLines(f, size),
 
-		top: Position{ nil, 0 },
+		top:        Position{nil, 0},
 		cursorLine: nil,
 
 		marks: avltree.NewAVLTree(lines.LineComp),
@@ -169,7 +179,7 @@ func InitialModel(f io.ReadSeeker, size int64) *Model {
 			NewStyle().
 			Background(lipgloss.Color("#00a0e4")),
 
-		searchStyles: [9] lipgloss.Style {
+		searchStyles: [9]lipgloss.Style{
 			lipgloss.NewStyle().Background(lipgloss.Color("#a50cfe")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#cd19ff")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#f026ff")),
@@ -181,24 +191,27 @@ func InitialModel(f io.ReadSeeker, size int64) *Model {
 			lipgloss.NewStyle().Background(lipgloss.Color("#ff728a")),
 		},
 
-		searches: [9] Search {},
-		searchHits: [9] *avltree.AVLTree[*lines.Line]{},
-		searchRanges: [9] *avltree.AVLTree[SearchRange]{},
+		searches:     [9]Search{},
+		searchHits:   [9]*avltree.AVLTree[*lines.Line]{},
+		searchRanges: [9]*avltree.AVLTree[SearchRange]{},
 
 		textbox: textinput.New(),
+
+		History: History{},
 	}
 
 	m.cursorLine = m.lines.First()
 	m.top.Line = m.cursorLine
 
 	for i := 0; i < len(m.searches); i++ {
-		m.searches[i] = Search {
-			regex: false,
+		m.searches[i] = Search{
+			regex:   false,
 			pattern: "",
 		}
 		m.searchHits[i] = avltree.NewAVLTree(lines.LineComp)
 		m.searchRanges[i] = avltree.NewAVLTree(searchRangeComp)
 
+		m.History.Searches[i].Search = make([]string, 0)
 	}
 
 	return &m
@@ -206,7 +219,7 @@ func InitialModel(f io.ReadSeeker, size int64) *Model {
 
 func (m *Model) hasNext(pos Position) bool {
 	segs := m.segmentize(pos.Line)
-	if pos.Segment < len(segs) - 1 {
+	if pos.Segment < len(segs)-1 {
 		return true
 	}
 	if m.lines.Next(pos.Line) != nil {
@@ -217,7 +230,7 @@ func (m *Model) hasNext(pos Position) bool {
 
 func (m *Model) next(pos Position) Position {
 	segs := m.segmentize(pos.Line)
-	if pos.Segment < len(segs) - 1 {
+	if pos.Segment < len(segs)-1 {
 		pos.Segment++
 		return pos
 	}
@@ -258,8 +271,8 @@ func (m *Model) prev(pos Position) Position {
 
 /// Return lowest visible line and lowest visible segment in the line.
 func (m *Model) bottomLine() (*lines.Line, int) {
-	pos := Position { m.top.Line, m.top.Segment }
-	for h := 0; m.hasNext(pos) && h < m.height - 1; h++ {
+	pos := Position{m.top.Line, m.top.Segment}
+	for h := 0; m.hasNext(pos) && h < m.height-1; h++ {
 		pos = m.next(pos)
 	}
 	return pos.Line, pos.Segment
@@ -306,7 +319,7 @@ func (m *Model) onKeyDown() {
 	} else {
 		bottomLine, bottomSegment := m.bottomLine()
 		segs := m.segmentize(bottomLine)
-		if (bottomSegment < len(segs) - 1) {
+		if bottomSegment < len(segs)-1 {
 			m.scrollOneSegmentDown()
 		}
 	}
@@ -321,32 +334,32 @@ func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
 }
 
 func (m *Model) onPageUp() {
-	it := Position{ m.cursorLine, 0 }
-	for i := 0; m.hasPrev(it) && i < m.height - 1; i++ {
+	it := Position{m.cursorLine, 0}
+	for i := 0; m.hasPrev(it) && i < m.height-1; i++ {
 		it = m.prev(it)
 	}
 	m.cursorLine = it.Line
 }
 
 func (m *Model) onPageDown() {
-	it := Position{ m.cursorLine, 0 }
-	for i := 0; m.hasNext(it) && i < m.height - 1; i++ {
+	it := Position{m.cursorLine, 0}
+	for i := 0; m.hasNext(it) && i < m.height-1; i++ {
 		it = m.next(it)
 	}
 	m.cursorLine = it.Line
 }
 
 func (m *Model) onHalfPageUp() {
-	it := Position{ m.cursorLine, 0 }
-	for i := 0; m.hasPrev(it) && i < m.height / 2; i++ {
+	it := Position{m.cursorLine, 0}
+	for i := 0; m.hasPrev(it) && i < m.height/2; i++ {
 		it = m.prev(it)
 	}
 	m.cursorLine = it.Line
 }
 
 func (m *Model) onHalfPageDown() {
-	it := Position{ m.cursorLine, 0 }
-	for i := 0; m.hasNext(it) && i < m.height / 2; i++ {
+	it := Position{m.cursorLine, 0}
+	for i := 0; m.hasNext(it) && i < m.height/2; i++ {
 		it = m.next(it)
 	}
 	m.cursorLine = it.Line
@@ -477,7 +490,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 
 		if !interrupted {
 			select {
-			case interrupted = <- m.progressInterrupt:
+			case interrupted = <-m.progressInterrupt:
 				break
 			default:
 				found := false
@@ -517,8 +530,8 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		}
 		m.updateSearchRange(search, r)
 
-		res := ProgressReport {
-			progress: prog,
+		res := ProgressReport{
+			progress:    prog,
 			interrupted: interrupted,
 		}
 
@@ -549,7 +562,7 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		interrupted := false
 		r := SearchRange{searchLine.Offset, 0}
 		select {
-		case interrupted = <- m.progressInterrupt:
+		case interrupted = <-m.progressInterrupt:
 			break
 		default:
 			found := false
@@ -592,8 +605,8 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 
 		m.updateSearchRange(search, r)
 
-		res := ProgressReport {
-			progress: prog,
+		res := ProgressReport{
+			progress:    prog,
 			interrupted: interrupted,
 		}
 
@@ -622,7 +635,7 @@ func (m *Model) normalizeView() {
 	bottomLine, _ := m.bottomLine()
 	if m.cursorLine.Offset > bottomLine.Offset {
 		ML.Info("Cursor %v appears to be after bottom line %v", m.cursorLine, bottomLine)
-		pos := Position { m.cursorLine, len(m.segmentize(m.cursorLine)) - 1 }
+		pos := Position{m.cursorLine, len(m.segmentize(m.cursorLine)) - 1}
 		for h := m.height; m.hasPrev(pos) && h > 1; h-- {
 			pos = m.prev(pos)
 		}
@@ -634,11 +647,11 @@ func (m *Model) normalizeView() {
 func (m *Model) centerCursor() {
 	segs := m.segmentize(m.cursorLine)
 
-	pos := Position {
-		Line: m.cursorLine,
+	pos := Position{
+		Line:    m.cursorLine,
 		Segment: 0,
 	}
-	for i := m.height / 2 - len(segs) / 2; m.hasPrev(pos) && i > 0; i-- {
+	for i := m.height/2 - len(segs)/2; m.hasPrev(pos) && i > 0; i-- {
 		pos = m.prev(pos)
 	}
 
@@ -685,7 +698,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
 
 	start := 0
 	for _, seg := range segs {
-		r0 = append(r0, CegmentRange{ start: start, end: start + len(seg), style: baseStyle })
+		r0 = append(r0, CegmentRange{start: start, end: start + len(seg), style: baseStyle})
 		start += len(seg)
 	}
 
@@ -701,7 +714,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
 
 		r1 := make([]utils.Range, 0)
 		for _, match := range matches {
-			r1 = append(r1, CegmentRange{ start: match.start, end: match.end, style: &m.searchStyles[i] })
+			r1 = append(r1, CegmentRange{start: match.start, end: match.end, style: &m.searchStyles[i]})
 		}
 
 		r0 = utils.RangesProduct(r0, r1)
@@ -717,7 +730,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
 
 		res[seg].style = append(res[seg].style, r.style)
 		l := r.end - r.start
-		res[seg].subsegments = append(res[seg].subsegments, segs[seg][start:start + l])
+		res[seg].subsegments = append(res[seg].subsegments, segs[seg][start:start+l])
 
 		start += l
 		if start >= len(segs[seg]) {
@@ -729,7 +742,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
 	return res
 }
 
-func (m *Model)renderStatusBar() string {
+func (m *Model) renderStatusBar() string {
 	cont := m.marks.Contains(m.cursorLine)
 	pred := m.marks.Predecessor(m.cursorLine)
 	succ := m.marks.Successor(m.cursorLine)
@@ -740,31 +753,23 @@ func (m *Model)renderStatusBar() string {
 	// 		m.cursorLine.Name, utils.Sprint64(m.lines.Nlines()),
 	// 		utils.Sprint64(m.lines.FileSize()))
 	// } else {
-		ll = fmt.Sprintf("Line %s/∞ ", m.cursorLine.Name())
+	ll = fmt.Sprintf("Line %s/∞ ", m.cursorLine.Name())
 	// }
 
 	ms := make([]string, 0)
 	if pred != nil {
-		dist := lines.Distance(*pred, m.cursorLine)
-		if dist == "" {
-			dist = fmt.Sprintf("%s⋯", (*pred).Name())
-		}
-		ms = append(ms, fmt.Sprintf("↑%s", dist))
+		ms = append(ms, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
 	}
 	if cont {
-		ms = append(ms, "◎")
+		ms = append(ms, "†")
 	}
 	if succ != nil {
-		dist := lines.Distance(m.cursorLine, *succ)
-		if dist == "" {
-			dist = fmt.Sprintf("⋯%s", (*succ).Name())
-		}
-		ms = append(ms, fmt.Sprintf("%s↓", dist))
+		ms = append(ms, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
 	}
 	marks := strings.Join(ms, " ")
 
 	rest := fmt.Sprintf("%-*s",
-		m.width - (utf8.RuneCountInString(ll) + utf8.RuneCountInString(marks)), "")
+		m.width-(utf8.RuneCountInString(ll)+utf8.RuneCountInString(marks)), "")
 
 	st1 := m.statusStyle.Render(ll)
 	st1 += m.markStyle.Render(marks)
@@ -780,26 +785,28 @@ func (m *Model)renderStatusBar() string {
 		pred = m.searchHits[i].Predecessor(m.cursorLine)
 		succ = m.searchHits[i].Successor(m.cursorLine)
 
-		sh := ""
+		sh := make([]string, 0)
 		if pred != nil {
-			r := m.searchRanges[i].Predecessor(SearchRange{ (*pred).Offset, 0 })
+			r := m.searchRanges[i].Predecessor(SearchRange{(*pred).Offset, 0})
 			if r != nil && (*pred).Offset >= r.start && (*pred).Offset < r.end {
-				sh += fmt.Sprintf("↑%s ", lines.Distance(*pred, m.cursorLine))
+				sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
 			} else {
-				sh += fmt.Sprintf("↑⋯%s ", lines.Distance(*pred, m.cursorLine))
+				sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
 			}
 		}
-		if succ != nil {
-			r := m.searchRanges[i].Predecessor(SearchRange{ (*succ).Offset, 0 })
-			if r != nil && (*succ).Offset >= r.start && (*succ).Offset < r.end {
-				sh += fmt.Sprintf("↓%s ", lines.Distance(m.cursorLine, *succ))
-			} else {
-				sh += fmt.Sprintf("↓⋯%s ", lines.Distance(m.cursorLine, *succ))
-			}
-		}
-		sh += fmt.Sprintf("◎%d", m.searchHits[i].Count())
 
-		st2 += m.searchStyles[i].Render(sh)
+		if succ != nil {
+			r := m.searchRanges[i].Predecessor(SearchRange{(*succ).Offset, 0})
+			if r != nil && (*succ).Offset >= r.start && (*succ).Offset < r.end {
+				sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+			} else {
+				sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+			}
+		}
+
+		sh = append(sh, fmt.Sprintf("◎%d", m.searchHits[i].Count()))
+
+		st2 += m.searchStyles[i].Render(strings.Join(sh, " "))
 	}
 
 	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
@@ -815,7 +822,7 @@ func (m *Model) renderProgress() string {
 	text := "Press Ctrl+c or Esc to interrupt"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
-	text = fmt.Sprintf("%s: %.1f%% done", m.progressPrompt, m.currentProgress * 100)
+	text = fmt.Sprintf("%s: %.1f%% done", m.progressPrompt, m.currentProgress*100)
 	res += "\n"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
@@ -825,10 +832,10 @@ func (m *Model) renderProgress() string {
 func (m *Model) renderSearchBar() string {
 	res := ""
 
-	text := "Tab: (regex/plain)  Ctrl+h/Ctrl+l or F2/F4: Next/Prev"
+	text := "Tab: (regex/plain)  F2/F4: Next/Prev  Ctrl+n: Next empty"
 	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
 
-	prompt := fmt.Sprintf("%d: ", m.search + 1)
+	prompt := fmt.Sprintf("%d: ", m.search+1)
 
 	if m.newSearch.regex {
 		prompt += "(regex): "
@@ -869,7 +876,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
 					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
-					// m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 				}
 
 				if m.activeSearchDirectionDown {
@@ -885,24 +892,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textbox.SetValue(m.searches[m.search].pattern)
 				m.activeSearchTextbox = false
 				m.textbox.Blur()
-			} else if k == "ctrl+l" || k == "f4" {
+			} else if k == "f4" {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
 					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
-					// m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 				}
-				if m.search < len(m.searches) - 1 {
+				if m.search < len(m.searches)-1 {
 					m.search++
 					m.newSearch = m.searches[m.search]
 					m.textbox.SetValue(m.newSearch.pattern)
 				}
-			} else if k == "ctrl+h" || k == "f2" {
+			} else if k == "f2" {
 				if m.newSearch.pattern != m.searches[m.search].pattern ||
 					m.newSearch.regex != m.searches[m.search].regex {
 					m.searches[m.search] = m.newSearch
 					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
-					// m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
 				}
 				if m.search > 0 {
@@ -910,6 +917,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.newSearch = m.searches[m.search]
 					m.textbox.SetValue(m.newSearch.pattern)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
+				}
+			} else if k == "ctrl+n" {
+				next := (m.search + 1) % len(m.searches)
+				for i := 0; i < len(m.searches); i++ {
+					if m.searches[next].pattern == "" {
+						break
+					}
+					next = (next + 1) % len(m.searches)
+				}
+				if next != m.search {
+					m.search = next
+					m.newSearch = m.searches[m.search]
+					m.textbox.SetValue(m.newSearch.pattern)
 				}
 			} else {
 				m.textbox, cmd = m.textbox.Update(msg)
