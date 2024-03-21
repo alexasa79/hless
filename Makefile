@@ -5,6 +5,6 @@ clean:
 	go clean
 
 test:
-	go test
+	go test ./...
 
 .PHONY: hless hless-x86_64

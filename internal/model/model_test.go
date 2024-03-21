@@ -1,14 +1,15 @@
-package main
+package model
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/alexasa79/hless/internal/lines"
 	"github.com/alexasa79/hless/internal/utils"
 )
 
 func createModel(s string, w int, h int) *Model {
-	m := initialModel(strings.NewReader(s), utils.Len64(s))
+	m := InitialModel(strings.NewReader(s), utils.Len64(s))
 	m.width = w
 	m.height = h
 	m.ready = true
@@ -17,9 +18,16 @@ func createModel(s string, w int, h int) *Model {
 }
 
 func (m *Model) verifyState(t *testing.T, line int64, segment int, cursor int64) {
-	if m.top.Line != line || m.top.Segment != segment || m.cursorLine != cursor {
-		t.Fatalf("Unexpected state: top=%v, cursor=%v. Expected %v and %v\n",
-			m.top, m.cursorLine, Position{ line, segment }, cursor)
+	lines := make([]*lines.Line, 0)
+	l := m.lines.First()
+	for l != nil {
+		lines = append(lines, l)
+		l = m.lines.Next(l)
+	}
+
+	if m.top.Line != lines[line] || m.top.Segment != segment || m.cursorLine != lines[cursor] {
+		t.Fatalf("Unexpected state: top=%v, cursor=%v. Expected %d(%d) and %v\n",
+			m.top, m.cursorLine, line, segment, cursor)
 	}
 }
 
