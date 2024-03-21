@@ -488,35 +488,36 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		interrupted := false
 		r := SearchRange{searchLine.Offset, 0}
 
-		if !interrupted {
+		found := false
+	outer:
+		for searchLine != nil && batch > 0 {
 			select {
 			case interrupted = <-m.progressInterrupt:
-				break
+				SL.Debug("Search interrupted")
+				break outer
 			default:
-				found := false
-				for searchLine != nil && batch > 0 {
-					matches := m.searchMatches(searchLine.Text(),
-						m.searches[search].pattern, m.searches[search].regex)
-					if len(matches) > 0 {
-						m.searchHits[search].Insert(searchLine)
-						found = true
-						break
-					}
-					searchLine = m.lines.Next(searchLine)
-					batch--
+				SL.Trace("Checking line %v for match", searchLine)
+				matches := m.searchMatches(searchLine.Text(),
+					m.searches[search].pattern, m.searches[search].regex)
+				if len(matches) > 0 {
+					m.searchHits[search].Insert(searchLine)
+					found = true
+					break
 				}
+				searchLine = m.lines.Next(searchLine)
+				batch--
+			}
+		}
 
-				if found {
-					interrupted = true
-					m.cursorLine = searchLine
-				} else {
-					if searchLine == nil {
-						prog = 1.0
-						interrupted = true
-					} else {
-						prog = float64(searchLine.Offset) / float64(m.lines.FileSize())
-					}
-				}
+		if found {
+			interrupted = true
+			m.cursorLine = searchLine
+		} else {
+			if searchLine == nil {
+				prog = 1.0
+				interrupted = true
+			} else {
+				prog = float64(searchLine.Offset) / float64(m.lines.FileSize())
 			}
 		}
 
@@ -561,12 +562,15 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		var prog float64 = 0
 		interrupted := false
 		r := SearchRange{searchLine.Offset, 0}
-		select {
-		case interrupted = <-m.progressInterrupt:
-			break
-		default:
-			found := false
-			for searchLine != nil && batch > 0 {
+
+		found := false
+	outer:
+		for searchLine != nil && batch > 0 {
+			select {
+			case interrupted = <-m.progressInterrupt:
+				SL.Debug("Search interrupted")
+				break outer
+			default:
 				SL.Trace("Checking line %v for match", searchLine)
 
 				matches := m.searchMatches(searchLine.Text(),
@@ -580,17 +584,16 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 				searchLine = m.lines.Prev(searchLine)
 				batch--
 			}
-
-			if found {
+		}
+		if found {
+			interrupted = true
+			m.cursorLine = searchLine
+		} else {
+			if searchLine == nil {
+				prog = 1.0
 				interrupted = true
-				m.cursorLine = searchLine
 			} else {
-				if searchLine == nil {
-					prog = 1.0
-					interrupted = true
-				} else {
-					prog = 1 - (float64(searchLine.Offset) / float64(m.lines.FileSize()))
-				}
+				prog = 1 - (float64(searchLine.Offset) / float64(m.lines.FileSize()))
 			}
 		}
 
@@ -939,6 +942,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			if k == "q" || k == "ctrl+c" {
 				if k == "ctrl+c" && m.inProgress {
+					ML.Debug("Interrupting search in progress")
 					m.progressInterrupt <- true
 				} else {
 					return m, tea.Quit
