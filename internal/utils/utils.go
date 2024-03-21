@@ -34,9 +34,13 @@ func Len64(slice interface{}) int64 {
 	return int64(val.Len())
 }
 
-func Assert(cond bool) {
+func Assert(cond bool, args ...interface{}) {
 	if !cond {
 		_, file, line, _ := runtime.Caller(1)
-		panic(fmt.Sprintf("Assertion violation at %s:%d", file, line))
+		meta := ""
+		for _, arg := range args {
+			meta += fmt.Sprintf("%+v\n", arg)
+		}
+		panic(fmt.Sprintf("Assertion violation at %s:%d, meta=\n%s", file, line, meta))
 	}
 }
