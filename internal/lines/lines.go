@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sync"
 
 	"github.com/alexasa79/hless/internal/avltree"
 	"github.com/alexasa79/hless/internal/hhlog"
@@ -11,6 +12,7 @@ import (
 )
 
 var LL *hhlog.Logger
+var mx sync.Mutex
 
 func SectionComp(a, b *Section) int {
 	if a.offset < b.offset {
@@ -98,11 +100,17 @@ func NewLines(file io.ReadSeeker, fileSize int64) *Lines {
 }
 
 func (lines Line) String() string {
+	mx.Lock()
+	defer mx.Unlock()
+
 	return fmt.Sprintf("[Line: @%d, len=%d, rlen=%d, index=%d, sec=%p]",
 		lines.Offset, lines.len, lines.rawLength, lines.index, lines.section)
 }
 
 func (s Section) String() string {
+	mx.Lock()
+	defer mx.Unlock()
+
 	return fmt.Sprintf("[Section: @%p, offset=%d, name=%s, lines=%d, buf=%d, parsed=%d,%d, index=%d,%d]",
 		&s, s.offset, s.name, s.lines, len(s.data), s.parsedStart, s.parsedEnd,
 		s.nextIndexForward, s.nextIndexBackward)
@@ -232,7 +240,10 @@ func (lines *Lines) readBackward() {
 }
 
 func (lines *Lines) First() *Line {
-	lines.JumpTo(0, "")
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.jumpTo(0, "")
 	lines.readForward()
 	t := lines.lines.Get(&Line{ Offset: 0 })
 	if t != nil {
@@ -242,7 +253,10 @@ func (lines *Lines) First() *Line {
 }
 
 func (lines *Lines) Last() *Line {
-	lines.JumpTo(lines.fileSize, "end")
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.jumpTo(lines.fileSize, "end")
 	lines.readBackward()
 	t := lines.lines.Predecessor(&Line{ Offset: math.MaxInt64 })
 	if t != nil {
@@ -305,6 +319,9 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 }
 
 func (lines *Lines) Next(line *Line) (next *Line) {
+	mx.Lock()
+	defer mx.Unlock()
+
 	next = lines.next(line, 0)
 	LL.Trace("Asked for next of %v, Got %v", line, next)
 	return next
@@ -344,12 +361,15 @@ func (lines *Lines) prev(line *Line, iterations int) *Line {
 }
 
 func (lines *Lines) Prev(line *Line) (prev *Line) {
+	mx.Lock()
+	defer mx.Unlock()
+
 	prev = lines.prev(line, 0)
 	LL.Trace("Asked for prev of %v, Got %v", line, prev)
 	return prev
 }
 
-func (lines *Lines) JumpTo(offset int64, name string) {
+func (lines *Lines) jumpTo(offset int64, name string) {
 	s := Section{ offset: offset }
 	t := lines.sections.Get(&s)
 	if t != nil {
@@ -374,14 +394,27 @@ func (lines *Lines) JumpTo(offset int64, name string) {
 	LL.Debug("Started new section %v", section)
 }
 
-func (lines *Line) Text() string {
-	s := lines.section
-	start := int(lines.Offset - s.offset)
-	end := start + lines.len
+func (lines *Lines) JumpTo(offset int64, name string) {
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.jumpTo(offset, name)
+}
+
+func (line *Line) Text() string {
+	mx.Lock()
+	defer mx.Unlock()
+
+	s := line.section
+	start := int(line.Offset - s.offset)
+	end := start + line.len
 	return string(s.data[start:end])
 }
 
 func (lines *Line) Name() string {
+	mx.Lock()
+	defer mx.Unlock()
+
 	s := lines.section
 	if s.name == "" {
 		return fmt.Sprintf("%d", lines.index)
