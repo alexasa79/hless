@@ -1,5 +1,6 @@
 logs/
 .vscode/
-hh
+/hh
+/log-gen
 hless.log
 .DS_Store
