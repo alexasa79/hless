@@ -287,3 +287,24 @@ func TestJumpTo(t *testing.T) {
 
 	utils.Assert(lines.sections.Count() == 1)
 }
+
+func TestJumpTo2(t *testing.T) {
+	s := "01\n345\n"
+	utils.Assert(len(s) == 7)
+	io := newStringReadSeeker(s)
+	lines := NewLines(io, int64(len(s)))
+	lines.batchSize = 2
+	lines.JumpTo(0, "")
+
+	lines.readForward()
+
+	lines.JumpTo(7, "end")
+	lines.readBackward()
+
+	utils.Assert(lines.sections.Count() == 2)
+
+	lines.JumpTo(7, "end")
+	lines.readBackward()
+
+	utils.Assert(lines.sections.Count() == 2)
+}

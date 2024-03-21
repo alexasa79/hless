@@ -97,9 +97,9 @@ func NewLines(file io.ReadSeeker, fileSize int64) *Lines {
 	return lines
 }
 
-func (l Line) String() string {
+func (lines Line) String() string {
 	return fmt.Sprintf("[Line: @%d, len=%d, rlen=%d, index=%d, sec=%p]",
-		l.Offset, l.len, l.rawLength, l.index, l.section)
+		lines.Offset, lines.len, lines.rawLength, lines.index, lines.section)
 }
 
 func (s Section) String() string {
@@ -109,19 +109,19 @@ func (s Section) String() string {
 
 }
 
-func (l *Lines) FileSize() int64 {
-	return l.fileSize
+func (lines *Lines) FileSize() int64 {
+	return lines.fileSize
 }
 
-func (l *Lines) readForward() {
-	buf := make([]byte, l.batchSize)
+func (lines *Lines) readForward() {
+	buf := make([]byte, lines.batchSize)
 
-	s := l.currentSection
-	l.file.Seek(s.offset + utils.Len64(s.data), io.SeekStart)
+	s := lines.currentSection
+	lines.file.Seek(s.offset + utils.Len64(s.data), io.SeekStart)
 
 	LL.Debug("Reading forward in section %v from offset %d", s, s.offset + utils.Len64(s.data))
 
-	n, err := l.file.Read(buf)
+	n, err := lines.file.Read(buf)
 	if err != nil {
 		return
 	}
@@ -141,10 +141,10 @@ func (l *Lines) readForward() {
 				len: len,
 				index: s.nextIndexForward,
 				rawLength: i - s.parsedEnd + 1,
-				section: l.currentSection,
+				section: lines.currentSection,
 			}
 
-			l.lines.Insert(&line)
+			lines.lines.Insert(&line)
 
 			s.lines++
 			s.nextIndexForward++
@@ -157,20 +157,20 @@ func (l *Lines) readForward() {
 	LL.Debug("Section after reading %v", s)
 }
 
-func (l *Lines) readBackward() {
-	s := l.currentSection
+func (lines *Lines) readBackward() {
+	s := lines.currentSection
 	if s.offset == 0 && s.parsedStart == 0 {
 		return
 	}
 
-	batchSize := utils.Min(int64(l.batchSize), s.offset)
+	batchSize := utils.Min(int64(lines.batchSize), s.offset)
 	s.offset -= batchSize
-	l.file.Seek(s.offset, io.SeekStart)
+	lines.file.Seek(s.offset, io.SeekStart)
 
 	LL.Debug("Reading backward in section %v from offset %d", s, s.offset)
 
 	buf := make([]byte, batchSize)
-	n, err := l.file.Read(buf)
+	n, err := lines.file.Read(buf)
 	if err != nil {
 		return
 	}
@@ -179,6 +179,7 @@ func (l *Lines) readBackward() {
 
 	s.data = append(buf[:n], s.data...)
 	s.parsedStart += n
+	s.parsedEnd += n
 	for i := s.parsedStart - 1; i >= 0; i-- {
 		len := s.parsedStart - i - 1
 		if s.data[i] == '\n' && len > 0 {
@@ -191,10 +192,10 @@ func (l *Lines) readBackward() {
 				len: len - 1,
 				index: s.nextIndexBackward,
 				rawLength: s.parsedStart - i - 1,
-				section: l.currentSection,
+				section: lines.currentSection,
 			}
 
-			l.lines.Insert(&line)
+			lines.lines.Insert(&line)
 
 			s.lines++
 			s.nextIndexBackward--
@@ -215,10 +216,10 @@ func (l *Lines) readBackward() {
 			len: len,
 			index: s.nextIndexBackward,
 			rawLength: s.parsedStart,
-			section: l.currentSection,
+			section: lines.currentSection,
 		}
 
-		l.lines.Insert(&line)
+		lines.lines.Insert(&line)
 
 		s.lines++
 		s.nextIndexBackward--
@@ -230,40 +231,55 @@ func (l *Lines) readBackward() {
 	LL.Debug("Section after reading %v", s)
 }
 
-func (l *Lines) First() *Line {
-	l.JumpTo(0, "")
-	l.readForward()
-	t := l.lines.Get(&Line{ Offset: 0 })
+func (lines *Lines) First() *Line {
+	lines.JumpTo(0, "")
+	lines.readForward()
+	t := lines.lines.Get(&Line{ Offset: 0 })
 	if t != nil {
 		return *t
 	}
 	return nil
 }
 
-func (l *Lines) Last() *Line {
-	l.JumpTo(l.fileSize, "end")
-	l.readBackward()
-	t := l.lines.Predecessor(&Line{ Offset: math.MaxInt64 })
+func (lines *Lines) Last() *Line {
+	lines.JumpTo(lines.fileSize, "end")
+	lines.readBackward()
+	t := lines.lines.Predecessor(&Line{ Offset: math.MaxInt64 })
 	if t != nil {
 		return *t
 	}
 	return nil
 }
 
-func (l *Lines) next(line *Line, iterations int) *Line {
+func (lines *Lines) moveToSection(line *Line, section *Section) {
+	utils.Assert(line.section != section)
+
+	// Works only if the line is at the beginning of its section or at the end of its section.
+	s2 := line.section
+	utils.Assert(int64(s2.parsedStart) + s2.offset == line.Offset ||
+		int64(s2.parsedEnd) + s2.offset == line.Offset + int64(line.rawLength),
+		section, line, s2)
+
+	if int64(s2.parsedStart) + s2.offset == line.Offset {
+		// The line is the first in its section. We have to trim the section's buffer and
+		// (parsedStart, parsedEnd)
+	}
+}
+
+func (lines *Lines) next(line *Line, iterations int) *Line {
 	// This is a mere protection against bugs. We should be able to iterate as many times as we
 	// need.
 	if iterations > 100 {
 		return nil
 	}
 
-	if line.Offset + int64(line.rawLength) >= l.fileSize {
+	if line.Offset + int64(line.rawLength) >= lines.fileSize {
 		return nil
 	}
 
 	var next *Line = nil
-	t := l.lines.Successor(line)
-	if t == nil && l.eof {
+	t := lines.lines.Successor(line)
+	if t == nil && lines.eof {
 		return nil
 	}
 
@@ -272,25 +288,29 @@ func (l *Lines) next(line *Line, iterations int) *Line {
 	}
 
 	if next == nil {
-		l.readForward()
-		return l.next(line, iterations + 1)
+		lines.readForward()
+		return lines.next(line, iterations + 1)
 	} else {
 		if line.Offset + int64(line.rawLength) == int64(next.Offset) {
+			if line.section != next.section {
+				lines.moveToSection(next, line.section)
+			}
+
 			return next
 		} else {
-			l.readForward()
-			return l.next(line, iterations + 1)
+			lines.readForward()
+			return lines.next(line, iterations + 1)
 		}
 	}
 }
 
-func (l *Lines) Next(line *Line) (next *Line) {
-	next = l.next(line, 0)
+func (lines *Lines) Next(line *Line) (next *Line) {
+	next = lines.next(line, 0)
 	LL.Trace("Asked for next of %v, Got %v", line, next)
 	return next
 }
 
-func (l *Lines) prev(line *Line, iterations int) *Line {
+func (lines *Lines) prev(line *Line, iterations int) *Line {
 	// This is a mere protection against bugs. We should be able to iterate as many times as we
 	// need.
 	if iterations > 100 {
@@ -302,68 +322,71 @@ func (l *Lines) prev(line *Line, iterations int) *Line {
 	}
 
 	var prev *Line = nil
-	t := l.lines.Predecessor(line)
+	t := lines.lines.Predecessor(line)
 	if t != nil {
 		prev = *t
 	}
 
 	if prev == nil {
-		l.readBackward()
-		return l.prev(line, iterations + 1)
+		lines.readBackward()
+		return lines.prev(line, iterations + 1)
 	} else {
 		if prev.Offset + int64(prev.rawLength) == int64(line.Offset) {
+			if line.section != prev.section {
+				lines.moveToSection(line, prev.section)
+			}
 			return prev
 		} else {
-			l.readBackward()
-			return l.prev(line, iterations + 1)
+			lines.readBackward()
+			return lines.prev(line, iterations + 1)
 		}
 	}
 }
 
-func (l *Lines) Prev(line *Line) (prev *Line) {
-	prev = l.prev(line, 0)
+func (lines *Lines) Prev(line *Line) (prev *Line) {
+	prev = lines.prev(line, 0)
 	LL.Trace("Asked for prev of %v, Got %v", line, prev)
 	return prev
 }
 
-func (l *Lines) JumpTo(offset int64, name string) {
+func (lines *Lines) JumpTo(offset int64, name string) {
 	s := Section{ offset: offset }
-	t := l.sections.Get(&s)
+	t := lines.sections.Get(&s)
 	if t != nil {
-		l.currentSection = *t
+		lines.currentSection = *t
 		return
 	}
 
-	t = l.sections.Predecessor(&s)
+	t = lines.sections.Predecessor(&s)
 	if t != nil {
 		pred := *t
-		if offset >= pred.offset && offset < pred.offset + utils.Len64(pred.data) {
-			l.currentSection = pred
+		if offset >= pred.offset && offset <= pred.offset + utils.Len64(pred.data) {
+			lines.currentSection = pred
 			return
 		}
 	}
 
 	section := newSection(offset, name)
 
-	l.currentSection = section
-	l.sections.Insert(section)
+	lines.currentSection = section
+	lines.sections.Insert(section)
 
 	LL.Debug("Started new section %v", section)
 }
 
-func (l *Line) Text() string {
-	s := l.section
-	start := int(l.Offset - s.offset)
-	end := start + l.len
+func (lines *Line) Text() string {
+	s := lines.section
+	start := int(lines.Offset - s.offset)
+	end := start + lines.len
 	return string(s.data[start:end])
 }
 
-func (l *Line) Name() string {
-	s := l.section
+func (lines *Line) Name() string {
+	s := lines.section
 	if s.name == "" {
-		return fmt.Sprintf("%d", l.index)
+		return fmt.Sprintf("%d", lines.index)
 	}
-	t := fmt.Sprintf("%s%+d", s.name, l.index)
+	t := fmt.Sprintf("%s%+d", s.name, lines.index)
 	return t
 }
 

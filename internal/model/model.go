@@ -807,6 +807,7 @@ func (m *Model) renderStatusBar() string {
 		sh = append(sh, fmt.Sprintf("◎%d", m.searchHits[i].Count()))
 
 		st2 += m.searchStyles[i].Render(strings.Join(sh, " "))
+		st2 += m.statusStyle.Render(" ")
 	}
 
 	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
@@ -1019,19 +1020,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 
-			// if search, ok := searchForwardRunes[k]; ok {
-			// 	if m.searches[search].pattern != "" {
-			// 		cmd = m.startProgress("Searching", m.findNextWithProgress(search))
-			// 		cmds = append(cmds, cmd)
-			// 	}
-			// }
+			if search, ok := searchForwardRunes[k]; ok {
+				if m.searches[search].pattern != "" {
+					cmd = m.startProgress("Searching", m.findNextWithProgress(search))
+					cmds = append(cmds, cmd)
+				}
+			}
 
-			// if search, ok := searchBackwardRunes[k]; ok {
-			// 	if m.searches[search].pattern != "" {
-			// 		cmd = m.startProgress("Searching", m.findPrevWithProgress(search))
-			// 		cmds = append(cmds, cmd)
-			// 	}
-			// }
+			if search, ok := searchBackwardRunes[k]; ok {
+				if m.searches[search].pattern != "" {
+					cmd = m.startProgress("Searching", m.findPrevWithProgress(search))
+					cmds = append(cmds, cmd)
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:
