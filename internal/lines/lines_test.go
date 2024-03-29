@@ -9,13 +9,13 @@ import (
 
 type stringReadSeeker struct {
 	pos int64
-	s string
+	s   string
 }
 
 func newStringReadSeeker(s string) *stringReadSeeker {
 	return &stringReadSeeker{
 		pos: 0,
-		s: s,
+		s:   s,
 	}
 }
 
@@ -56,7 +56,7 @@ func TestTrivial(t *testing.T) {
 	lines := NewLines(io, int64(len(s)))
 	lines.readForward()
 
-	search := &Line { Offset: 0 }
+	search := &Line{Offset: 0}
 	l := lines.lines.Get(search)
 	utils.Assert(l != nil)
 	utils.Assert((*l).Text() == "hello")
@@ -65,7 +65,7 @@ func TestTrivial(t *testing.T) {
 	utils.Assert((*l).Name() == "1")
 	first := l
 
-	search = &Line { Offset: 6 }
+	search = &Line{Offset: 6}
 	l = lines.lines.Get(search)
 	utils.Assert(l != nil)
 	utils.Assert((*l).Text() == "worlds")
@@ -83,7 +83,7 @@ func TestCR(t *testing.T) {
 	lines := NewLines(io, int64(len(s)))
 	lines.readForward()
 
-	search := &Line { Offset: 0 }
+	search := &Line{Offset: 0}
 	l := lines.lines.Get(search)
 	utils.Assert(l != nil)
 	utils.Assert((*l).Text() == "hello")
@@ -92,7 +92,7 @@ func TestCR(t *testing.T) {
 	utils.Assert((*l).Name() == "1")
 	first := l
 
-	search = &Line { Offset: 7 }
+	search = &Line{Offset: 7}
 	l = lines.lines.Get(search)
 	utils.Assert(l != nil)
 	utils.Assert((*l).Text() == "worlds")
@@ -111,7 +111,7 @@ func TestLongLines(t *testing.T) {
 	lines.batchSize = 2
 
 	lines.readForward()
-	search := &Line { Offset: 0 }
+	search := &Line{Offset: 0}
 	l := lines.lines.Get(search)
 	utils.Assert(l == nil)
 	lines.readForward()
@@ -161,7 +161,7 @@ func TestReadBackward(t *testing.T) {
 	lines.readBackward()
 	utils.Assert(lines.lines.Count() == 1)
 
-	search := &Line { Offset: 3 }
+	search := &Line{Offset: 3}
 	l := lines.lines.Get(search)
 	utils.Assert(l != nil)
 	ll := *l
@@ -201,7 +201,7 @@ func TestReadBackward2(t *testing.T) {
 	lines.readBackward()
 	utils.Assert(lines.lines.Count() == 1)
 
-	search := &Line { Offset: 4 }
+	search := &Line{Offset: 4}
 	l := lines.lines.Get(search)
 	utils.Assert(l != nil)
 	ll := *l
@@ -307,4 +307,15 @@ func TestJumpTo2(t *testing.T) {
 	lines.readBackward()
 
 	utils.Assert(lines.sections.Count() == 2)
+}
+
+func TestSections(t *testing.T) {
+	s := "001\n002\n003\n004\n005\n006\n007\n008\n009\n010\n011\n012\n013\n014\n015\n016\n017\n018\n019\n020\n021\n022\n023\n024\n025\n026\n027\n028\n029\n030\n031\n032\n033\n034\n035\n036\n037\n038\n039\n040\n041\n042\n043\n044\n045\n046\n047\n048\n049\n050\n051\n052\n053\n054\n055\n056\n057\n058\n059\n060\n061\n062\n063\n064\n065\n066\n067\n068\n069\n070\n071\n072\n073\n074\n075\n076\n077\n078\n079\n080\n081\n082\n083\n084\n085\n086\n087\n088\n089\n090\n091\n092\n093\n094\n095\n096\n097\n098\n099\n100\n"
+	io := newStringReadSeeker(s)
+	lines := NewLines(io, int64(len(s)))
+	lines.sectionMemory = 8
+	lines.batchSize = 2
+
+	l := lines.Last()
+	utils.Assert(l.Offset == 400-4)
 }

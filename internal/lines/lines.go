@@ -26,14 +26,14 @@ func SectionComp(a, b *Section) int {
 
 type Section struct {
 	offset int64
-	name string
+	name   string
 
-	data []byte
+	data        []byte
 	parsedStart int // first parsed byte
-	parsedEnd int // last parsed byte
-	lines int // how many lines we found
+	parsedEnd   int // last parsed byte
+	lines       int // how many lines we found
 
-	nextIndexForward int
+	nextIndexForward  int
 	nextIndexBackward int
 }
 
@@ -48,45 +48,45 @@ func LineComp(a, b *Line) int {
 }
 
 type Line struct {
-	Offset int64
-	len int // length of text
-	index int // index in section
+	Offset    int64
+	len       int // length of text
+	index     int // index in section
 	rawLength int // raw length, with end of line
-	section *Section
+	section   *Section
 }
 
 type Lines struct {
-	file io.ReadSeeker
+	file     io.ReadSeeker
 	fileSize int64
-	eof bool
+	eof      bool
 
 	batchSize int
 
-	lines *avltree.AVLTree[* Line]
-	sections *avltree.AVLTree[* Section]
+	lines    *avltree.AVLTree[*Line]
+	sections *avltree.AVLTree[*Section]
 
 	currentSection *Section
 }
 
 func newSection(offset int64, name string) *Section {
 	return &Section{
-		data: make([]byte, 0),
-		offset: offset,
-		name: name,
-		nextIndexForward: 1,
+		data:              make([]byte, 0),
+		offset:            offset,
+		name:              name,
+		nextIndexForward:  1,
 		nextIndexBackward: -1,
 	}
 }
 
 func NewLines(file io.ReadSeeker, fileSize int64) *Lines {
 	lines := &Lines{
-		file: file,
+		file:     file,
 		fileSize: fileSize,
-		eof: false,
+		eof:      false,
 
 		batchSize: 65536,
 
-		lines: avltree.NewAVLTree[* Line](LineComp),
+		lines:    avltree.NewAVLTree[*Line](LineComp),
 		sections: avltree.NewAVLTree[*Section](SectionComp),
 
 		currentSection: newSection(0, ""),
@@ -125,9 +125,9 @@ func (lines *Lines) readForward() {
 	buf := make([]byte, lines.batchSize)
 
 	s := lines.currentSection
-	lines.file.Seek(s.offset + utils.Len64(s.data), io.SeekStart)
+	lines.file.Seek(s.offset+utils.Len64(s.data), io.SeekStart)
 
-	LL.Debug("Reading forward in section %v from offset %d", s, s.offset + utils.Len64(s.data))
+	LL.Debug("Reading forward in section %v from offset %d", s, s.offset+utils.Len64(s.data))
 
 	n, err := lines.file.Read(buf)
 	if err != nil {
@@ -140,16 +140,16 @@ func (lines *Lines) readForward() {
 	for i := s.parsedEnd; i < len(s.data); i++ {
 		if s.data[i] == '\n' { // 123\n
 			len := i - s.parsedEnd
-			if i > 0 && s.data[i - 1] == '\r' {
+			if i > 0 && s.data[i-1] == '\r' {
 				len--
 			}
 
-			line := Line {
-				Offset: int64(s.parsedEnd) + s.offset,
-				len: len,
-				index: s.nextIndexForward,
+			line := Line{
+				Offset:    int64(s.parsedEnd) + s.offset,
+				len:       len,
+				index:     s.nextIndexForward,
 				rawLength: i - s.parsedEnd + 1,
-				section: lines.currentSection,
+				section:   lines.currentSection,
 			}
 
 			lines.lines.Insert(&line)
@@ -191,16 +191,16 @@ func (lines *Lines) readBackward() {
 	for i := s.parsedStart - 1; i >= 0; i-- {
 		len := s.parsedStart - i - 1
 		if s.data[i] == '\n' && len > 0 {
-			if s.data[i + len - 1] == '\r' {
+			if s.data[i+len-1] == '\r' {
 				len--
 			}
 
-			line := Line {
-				Offset: int64(i) + s.offset + 1,
-				len: len - 1,
-				index: s.nextIndexBackward,
+			line := Line{
+				Offset:    int64(i) + s.offset + 1,
+				len:       len - 1,
+				index:     s.nextIndexBackward,
 				rawLength: s.parsedStart - i - 1,
-				section: lines.currentSection,
+				section:   lines.currentSection,
 			}
 
 			lines.lines.Insert(&line)
@@ -215,16 +215,16 @@ func (lines *Lines) readBackward() {
 
 	if s.offset == 0 {
 		len := s.parsedStart - 1
-		if s.data[len - 1] == '\r' {
+		if s.data[len-1] == '\r' {
 			len--
 		}
 
-		line := Line {
-			Offset: 0,
-			len: len,
-			index: s.nextIndexBackward,
+		line := Line{
+			Offset:    0,
+			len:       len,
+			index:     s.nextIndexBackward,
 			rawLength: s.parsedStart,
-			section: lines.currentSection,
+			section:   lines.currentSection,
 		}
 
 		lines.lines.Insert(&line)
@@ -245,7 +245,7 @@ func (lines *Lines) First() *Line {
 
 	lines.jumpTo(0, "")
 	lines.readForward()
-	t := lines.lines.Get(&Line{ Offset: 0 })
+	t := lines.lines.Get(&Line{Offset: 0})
 	if t != nil {
 		return *t
 	}
@@ -258,7 +258,7 @@ func (lines *Lines) Last() *Line {
 
 	lines.jumpTo(lines.fileSize, "end")
 	lines.readBackward()
-	t := lines.lines.Predecessor(&Line{ Offset: math.MaxInt64 })
+	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
 	if t != nil {
 		return *t
 	}
@@ -270,11 +270,11 @@ func (lines *Lines) moveToSection(line *Line, section *Section) {
 
 	// Works only if the line is at the beginning of its section or at the end of its section.
 	s2 := line.section
-	utils.Assert(int64(s2.parsedStart) + s2.offset == line.Offset ||
-		int64(s2.parsedEnd) + s2.offset == line.Offset + int64(line.rawLength),
+	utils.Assert(int64(s2.parsedStart)+s2.offset == line.Offset ||
+		int64(s2.parsedEnd)+s2.offset == line.Offset+int64(line.rawLength),
 		section, line, s2)
 
-	if int64(s2.parsedStart) + s2.offset == line.Offset {
+	if int64(s2.parsedStart)+s2.offset == line.Offset {
 		// The line is the first in its section. We have to trim the section's buffer and
 		// (parsedStart, parsedEnd)
 	}
@@ -287,7 +287,7 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 		return nil
 	}
 
-	if line.Offset + int64(line.rawLength) >= lines.fileSize {
+	if line.Offset+int64(line.rawLength) >= lines.fileSize {
 		return nil
 	}
 
@@ -303,9 +303,9 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 
 	if next == nil {
 		lines.readForward()
-		return lines.next(line, iterations + 1)
+		return lines.next(line, iterations+1)
 	} else {
-		if line.Offset + int64(line.rawLength) == int64(next.Offset) {
+		if line.Offset+int64(line.rawLength) == int64(next.Offset) {
 			if line.section != next.section {
 				lines.moveToSection(next, line.section)
 			}
@@ -313,7 +313,7 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 			return next
 		} else {
 			lines.readForward()
-			return lines.next(line, iterations + 1)
+			return lines.next(line, iterations+1)
 		}
 	}
 }
@@ -346,16 +346,16 @@ func (lines *Lines) prev(line *Line, iterations int) *Line {
 
 	if prev == nil {
 		lines.readBackward()
-		return lines.prev(line, iterations + 1)
+		return lines.prev(line, iterations+1)
 	} else {
-		if prev.Offset + int64(prev.rawLength) == int64(line.Offset) {
+		if prev.Offset+int64(prev.rawLength) == int64(line.Offset) {
 			if line.section != prev.section {
 				lines.moveToSection(line, prev.section)
 			}
 			return prev
 		} else {
 			lines.readBackward()
-			return lines.prev(line, iterations + 1)
+			return lines.prev(line, iterations+1)
 		}
 	}
 }
@@ -370,7 +370,7 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 }
 
 func (lines *Lines) jumpTo(offset int64, name string) {
-	s := Section{ offset: offset }
+	s := Section{offset: offset}
 	t := lines.sections.Get(&s)
 	if t != nil {
 		lines.currentSection = *t
@@ -380,7 +380,7 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 	t = lines.sections.Predecessor(&s)
 	if t != nil {
 		pred := *t
-		if offset >= pred.offset && offset <= pred.offset + utils.Len64(pred.data) {
+		if offset >= pred.offset && offset <= pred.offset+utils.Len64(pred.data) {
 			lines.currentSection = pred
 			return
 		}

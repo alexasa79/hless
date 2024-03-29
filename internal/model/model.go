@@ -68,7 +68,7 @@ func (c CegmentRange) Subrange(start int, end int) utils.Range {
 	return CegmentRange{start: start, end: end, style: c.style}
 }
 
-/// Colored segment of a string
+// / Colored segment of a string
 type Cegment struct {
 	subsegments []string
 	style       []*lipgloss.Style
@@ -269,7 +269,7 @@ func (m *Model) prev(pos Position) Position {
 	panic("Attempt to move before beginning of the buffer")
 }
 
-/// Return lowest visible line and lowest visible segment in the line.
+// / Return lowest visible line and lowest visible segment in the line.
 func (m *Model) bottomLine() (*lines.Line, int) {
 	pos := Position{m.top.Line, m.top.Segment}
 	for h := 0; m.hasNext(pos) && h < m.height-1; h++ {
@@ -558,21 +558,21 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		// In this case we set the progress based on the current search line out of total
 		// number of lines. Or we did not yet reach the end of the file. In this case
 		// we set the progress to be the progress returned by populate()
-		batch := int64(10000)
+		batch := int64(100000)
 		var prog float64 = 0
 		interrupted := false
 		r := SearchRange{searchLine.Offset, 0}
 
 		found := false
 	outer:
-		for searchLine != nil && batch > 0 {
-			select {
-			case interrupted = <-m.progressInterrupt:
-				SL.Debug("Search interrupted")
-				break outer
-			default:
-				SL.Trace("Checking line %v for match", searchLine)
+		select {
+		case interrupted = <-m.progressInterrupt:
+			SL.Debug("Search interrupted")
+			break outer
+		default:
+			SL.Trace("Checking line %v for match", searchLine)
 
+			for searchLine != nil && batch > 0 {
 				matches := m.searchMatches(searchLine.Text(),
 					m.searches[search].pattern, m.searches[search].regex)
 				if len(matches) > 0 {
@@ -585,6 +585,7 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 				batch--
 			}
 		}
+
 		if found {
 			interrupted = true
 			m.cursorLine = searchLine
@@ -619,9 +620,9 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 	}
 }
 
-/// Given current position of the cursor, make sure it is visible.
-/// This is needed in cases when change of terminal's size causes the cursor
-/// to become invisible (usually by being below bottom line).
+// / Given current position of the cursor, make sure it is visible.
+// / This is needed in cases when change of terminal's size causes the cursor
+// / to become invisible (usually by being below bottom line).
 func (m *Model) normalizeView() {
 	if !m.ready {
 		return

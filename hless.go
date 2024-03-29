@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/pprof"
 	"strings"
 
 	"github.com/alexasa79/hless/internal/hhlog"
@@ -13,11 +14,12 @@ import (
 )
 
 type config struct {
-	Help bool `clap:"--help,-h"`
-	Debug  string `clap:"--debug"`
-	Trace string `clap:"--trace"`
-	Version bool `clap:"--version,-V"`
+	Help       bool     `clap:"--help,-h"`
+	Debug      string   `clap:"--debug"`
+	Trace      string   `clap:"--trace"`
+	Version    bool     `clap:"--version,-V"`
 	InputFiles []string `clap:"trailing"`
+	Profile    bool     `clap:"--profile"`
 }
 
 var help string = `Usage: hh [OPTIONS] FILE
@@ -31,6 +33,7 @@ Options:
 	                    list of modules.
       --trace [MODS]    Enable trace logging for specified comma separated
 	                    list of modules. Implies --debug.
+	  --profile         Enable CPU profiling.
 
   Supported modules with --debug and --trace:
     all, view, model, search, lines
@@ -44,15 +47,25 @@ var ML *hhlog.Logger
 var LL *hhlog.Logger
 
 func main() {
-	cfg := &config {
-		Help: false,
-		Debug: "",
-		Trace: "",
+	cfg := &config{
+		Help:       false,
+		Debug:      "",
+		Trace:      "",
 		InputFiles: make([]string, 0),
 	}
 	if _, err := clap.Parse(os.Args[1:], cfg); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
+	}
+
+	if cfg.Profile {
+		prof, err := os.Create("hless.prof")
+		if err != nil {
+			panic(err)
+		}
+		pprof.StartCPUProfile(prof)
+		defer pprof.StopCPUProfile()
+		defer prof.Close()
 	}
 
 	if cfg.Help {
@@ -88,10 +101,14 @@ func main() {
 		setLevels := func(s string, newLevel hhlog.LogLevel) {
 			for _, level := range strings.Split(s, ",") {
 				switch level {
-				case "model": ML.MinLevel = newLevel
-				case "view": VL.MinLevel = newLevel
-				case "search": SL.MinLevel = newLevel
-				case "lines": LL.MinLevel = newLevel
+				case "model":
+					ML.MinLevel = newLevel
+				case "view":
+					VL.MinLevel = newLevel
+				case "search":
+					SL.MinLevel = newLevel
+				case "lines":
+					LL.MinLevel = newLevel
 				case "all":
 					ML.MinLevel = newLevel
 					VL.MinLevel = newLevel
