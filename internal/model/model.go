@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/alexasa79/hless/internal/avltree"
@@ -89,6 +91,7 @@ type Model struct {
 
 	defaultStyle lipgloss.Style
 	cursorStyle  lipgloss.Style
+	errorStyle   lipgloss.Style
 	statusStyle  lipgloss.Style
 	markStyle    lipgloss.Style
 
@@ -104,11 +107,18 @@ type Model struct {
 	searchRanges [9]*avltree.AVLTree[SearchRange]
 	search       int
 
+	activeGotoTextbox bool
+	gotoLine          int64
+
 	inProgress        bool
 	currentProgress   float64
 	progressInterrupt chan bool
 	progressCmd       tea.Cmd
 	progressPrompt    string
+
+	activeError           bool
+	errorText             string
+	errorTimeoutScheduled bool
 
 	History History
 }
@@ -172,6 +182,10 @@ func InitialModel(b *lines.Buffer) *Model {
 			NewStyle().
 			Background(lipgloss.Color("#ffda45")).
 			Foreground(lipgloss.Color("#000000")),
+		errorStyle: lipgloss.
+			NewStyle().
+			Background(lipgloss.Color("#ff0000")).
+			Foreground(lipgloss.Color("#ffffff")),
 		statusStyle: lipgloss.
 			NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
@@ -621,6 +635,63 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 	}
 }
 
+func (m *Model) setError(err string) {
+	m.activeError = true
+	m.errorText = err
+	m.errorTimeoutScheduled = false
+}
+
+func (m *Model) gotoWithProgress() tea.Cmd {
+	SL.Info("Going to line %v", m.gotoLine)
+
+	counter := int64(1)
+	currentLine := m.lines.First()
+
+	return func() tea.Msg {
+		SL.Debug("Callback called for %v", counter)
+
+		// One of two things can happen. Either we already read to the end of the file.
+		// In this case we set the progress based on the current search line out of total
+		// number of lines. Or we did not yet reach the end of the file. In this case
+		// we set the progress to be the progress returned by populate()
+		batch := int64(100000)
+		var prog float64 = 0
+		interrupted := false
+
+	outer:
+		for batch > 0 && counter < m.gotoLine && currentLine != nil {
+			select {
+			case interrupted = <-m.progressInterrupt:
+				SL.Debug("Goto interrupted")
+				break outer
+			default:
+				currentLine = m.lines.Next(currentLine)
+				batch--
+				counter++
+			}
+		}
+
+		if counter == m.gotoLine {
+			interrupted = true
+			m.cursorLine = currentLine
+		} else if currentLine == nil {
+			m.setError("Line not found")
+			interrupted = true
+		}
+
+		prog = float64(counter) / float64(m.gotoLine)
+
+		res := ProgressReport{
+			progress:    prog,
+			interrupted: interrupted,
+		}
+
+		SL.Debug("Returning progress report %v", res)
+
+		return res
+	}
+}
+
 // / Given current position of the cursor, make sure it is visible.
 // / This is needed in cases when change of terminal's size causes the cursor
 // / to become invisible (usually by being below bottom line).
@@ -780,42 +851,48 @@ func (m *Model) renderStatusBar() string {
 	st1 += m.markStyle.Render(marks)
 	st1 += m.statusStyle.Render(rest)
 
-	st2 := m.statusStyle.Render("")
+	st2 := ""
 
-	for i := 0; i < len(m.searches); i++ {
-		if m.searches[i].pattern == "" {
-			continue
-		}
+	if m.activeError {
+		st2 += m.errorStyle.Render(fmt.Sprintf("%-*s", m.width, m.errorText))
+	} else {
+		st2 = m.statusStyle.Render("")
 
-		pred = m.searchHits[i].Predecessor(m.cursorLine)
-		succ = m.searchHits[i].Successor(m.cursorLine)
-
-		sh := make([]string, 0)
-		if pred != nil {
-			r := m.searchRanges[i].Predecessor(SearchRange{(*pred).Offset, 0})
-			if r != nil && (*pred).Offset >= r.start && (*pred).Offset < r.end {
-				sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
-			} else {
-				sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
+		for i := 0; i < len(m.searches); i++ {
+			if m.searches[i].pattern == "" {
+				continue
 			}
-		}
 
-		if succ != nil {
-			r := m.searchRanges[i].Predecessor(SearchRange{(*succ).Offset, 0})
-			if r != nil && (*succ).Offset >= r.start && (*succ).Offset < r.end {
-				sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
-			} else {
-				sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+			pred = m.searchHits[i].Predecessor(m.cursorLine)
+			succ = m.searchHits[i].Successor(m.cursorLine)
+
+			sh := make([]string, 0)
+			if pred != nil {
+				r := m.searchRanges[i].Predecessor(SearchRange{(*pred).Offset, 0})
+				if r != nil && (*pred).Offset >= r.start && (*pred).Offset < r.end {
+					sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
+				} else {
+					sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
+				}
 			}
+
+			if succ != nil {
+				r := m.searchRanges[i].Predecessor(SearchRange{(*succ).Offset, 0})
+				if r != nil && (*succ).Offset >= r.start && (*succ).Offset < r.end {
+					sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+				} else {
+					sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+				}
+			}
+
+			sh = append(sh, fmt.Sprintf("◎%d", m.searchHits[i].Count()))
+
+			st2 += m.searchStyles[i].Render(strings.Join(sh, " "))
+			st2 += m.statusStyle.Render(" ")
 		}
 
-		sh = append(sh, fmt.Sprintf("◎%d", m.searchHits[i].Count()))
-
-		st2 += m.searchStyles[i].Render(strings.Join(sh, " "))
-		st2 += m.statusStyle.Render(" ")
+		st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 	}
-
-	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 
 	return "\n" + st1 + "\n" + st2
 }
@@ -848,6 +925,24 @@ func (m *Model) renderSearchBar() string {
 	} else {
 		prompt += "(plain): "
 	}
+
+	m.textbox.Width = m.width
+	m.textbox.Prompt = prompt
+	m.textbox.PromptStyle = m.searchStyles[m.search]
+	m.textbox.TextStyle = m.searchStyles[m.search]
+
+	res += "\n" + m.textbox.View()
+
+	return res
+}
+
+func (m *Model) renderGotoBar() string {
+	res := ""
+
+	text := ""
+	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
+
+	prompt := fmt.Sprintf("%d: ", m.search+1)
 
 	m.textbox.Width = m.width
 	m.textbox.Prompt = prompt
@@ -941,10 +1036,31 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textbox, cmd = m.textbox.Update(msg)
 				cmds = append(cmds, cmd)
 			}
+		} else if m.activeGotoTextbox {
+			if k == "esc" || k == "ctrl+c" {
+				m.textbox.SetValue("")
+				m.activeGotoTextbox = false
+				m.textbox.Blur()
+			} else if k == "enter" {
+				m.activeGotoTextbox = false
+				m.textbox.Blur()
+
+				num, err := strconv.Atoi(m.textbox.Value())
+				if err != nil {
+					break
+				}
+				m.gotoLine = int64(num)
+
+				cmd = m.startProgress("Scanning", m.gotoWithProgress())
+				cmds = append(cmds, cmd)
+			} else {
+				m.textbox, cmd = m.textbox.Update(msg)
+				cmds = append(cmds, cmd)
+			}
 		} else {
 			if k == "q" || k == "ctrl+c" {
 				if k == "ctrl+c" && m.inProgress {
-					ML.Debug("Interrupting search in progress")
+					ML.Debug("Interrupting progress")
 					m.progressInterrupt <- true
 				} else {
 					return m, tea.Quit
@@ -1016,6 +1132,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+			if k == ":" {
+				m.activeGotoTextbox = true
+				cmds = append(cmds, m.textbox.Focus())
+				cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
+			}
+
 			if k == "n" {
 				cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
 				cmds = append(cmds, cmd)
@@ -1061,6 +1183,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.inProgress = false
 			m.progressInterrupt = nil
 		}
+	}
+
+	if m.activeError && !m.errorTimeoutScheduled {
+		ML.Debug("Scheduling error timeout")
+		m.errorTimeoutScheduled = true
+		cmds = append(cmds, tea.Tick(time.Second, func(time.Time) tea.Msg {
+			ML.Debug("Error timeout called")
+			m.activeError = false
+			return true
+		}))
 	}
 
 	m.normalizeView()
@@ -1137,6 +1269,8 @@ func (m *Model) View() string {
 
 	if m.activeSearchTextbox {
 		res += m.renderSearchBar()
+	} else if m.activeGotoTextbox {
+		res += m.renderGotoBar()
 	} else if m.inProgress {
 		res += m.renderProgress()
 	} else {
