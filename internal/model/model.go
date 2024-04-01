@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"io"
 	"reflect"
 	"regexp"
 	"strings"
@@ -77,7 +76,8 @@ type Cegment struct {
 type Model struct {
 	ready bool
 
-	lines *lines.Lines
+	buffer *lines.Buffer
+	lines  *lines.Lines
 
 	marks *avltree.AVLTree[*lines.Line]
 
@@ -155,11 +155,12 @@ func searchRangeComp(a, b SearchRange) int {
 	return int64Comp(a.start, b.start)
 }
 
-func InitialModel(f io.ReadSeeker, size int64) *Model {
+func InitialModel(b *lines.Buffer) *Model {
 	m := Model{
 		ready: false,
 
-		lines: lines.NewLines(f, size),
+		buffer: b,
+		lines:  lines.NewLines(b),
 
 		top:        Position{nil, 0},
 		cursorLine: nil,
@@ -444,7 +445,7 @@ func (m *Model) searchScreen(search int, from *lines.Line, howMany int) *lines.L
 	curr := m.cursorLine
 	r := SearchRange{from.Offset, 0}
 	for curr != nil && howMany >= 0 {
-		matches := m.searchMatches(curr.Text(), m.searches[search].pattern, m.searches[search].regex)
+		matches := m.searchMatches(m.lines.Text(curr), m.searches[search].pattern, m.searches[search].regex)
 		if len(matches) > 0 {
 			m.searchHits[search].Insert(curr)
 		}
@@ -453,7 +454,7 @@ func (m *Model) searchScreen(search int, from *lines.Line, howMany int) *lines.L
 	}
 
 	if curr == nil {
-		r.end = m.lines.FileSize()
+		r.end = m.buffer.Size()
 	} else {
 		r.end = curr.Offset
 	}
@@ -497,12 +498,12 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 				break outer
 			default:
 				SL.Trace("Checking line %v for match", searchLine)
-				matches := m.searchMatches(searchLine.Text(),
+				matches := m.searchMatches(m.lines.Text(searchLine),
 					m.searches[search].pattern, m.searches[search].regex)
 				if len(matches) > 0 {
 					m.searchHits[search].Insert(searchLine)
 					found = true
-					break
+					break outer
 				}
 				searchLine = m.lines.Next(searchLine)
 				batch--
@@ -517,7 +518,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 				prog = 1.0
 				interrupted = true
 			} else {
-				prog = float64(searchLine.Offset) / float64(m.lines.FileSize())
+				prog = float64(searchLine.Offset) / float64(m.buffer.Size())
 			}
 		}
 
@@ -527,7 +528,7 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		if searchLine != nil {
 			r.end = searchLine.Offset
 		} else {
-			r.end = m.lines.FileSize()
+			r.end = m.buffer.Size()
 		}
 		m.updateSearchRange(search, r)
 
@@ -565,21 +566,21 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 
 		found := false
 	outer:
-		select {
-		case interrupted = <-m.progressInterrupt:
-			SL.Debug("Search interrupted")
-			break outer
-		default:
-			SL.Trace("Checking line %v for match", searchLine)
+		for searchLine != nil && batch > 0 {
+			select {
+			case interrupted = <-m.progressInterrupt:
+				SL.Debug("Search interrupted")
+				break outer
+			default:
+				SL.Trace("Checking line %v for match", searchLine)
 
-			for searchLine != nil && batch > 0 {
-				matches := m.searchMatches(searchLine.Text(),
+				matches := m.searchMatches(m.lines.Text(searchLine),
 					m.searches[search].pattern, m.searches[search].regex)
 				if len(matches) > 0 {
 					m.searchHits[search].Insert(searchLine)
 					found = true
 					SL.Debug("Line %v matches", searchLine)
-					break
+					break outer
 				}
 				searchLine = m.lines.Prev(searchLine)
 				batch--
@@ -594,7 +595,7 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 				prog = 1.0
 				interrupted = true
 			} else {
-				prog = 1 - (float64(searchLine.Offset) / float64(m.lines.FileSize()))
+				prog = 1 - (float64(searchLine.Offset) / float64(m.buffer.Size()))
 			}
 		}
 
@@ -602,7 +603,7 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		lastProgress = prog
 
 		if searchLine == nil {
-			r.end = m.lines.FileSize()
+			r.end = m.buffer.Size()
 		} else {
 			r.end = searchLine.Offset
 		}
@@ -680,7 +681,7 @@ func (m *Model) prevMark() {
 }
 
 func (m *Model) segmentize(l *lines.Line) []string {
-	line := l.Text()
+	line := m.lines.Text(l)
 	res := make([]string, 0)
 	for line != "" {
 		l := utils.Min(m.width, len(line))
@@ -698,7 +699,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
 	segs := m.segmentize(l)
 	r0 := make([]utils.Range, 0)
 
-	line := l.Text()
+	line := m.lines.Text(l)
 
 	start := 0
 	for _, seg := range segs {

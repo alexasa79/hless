@@ -132,14 +132,11 @@ func main() {
 		model.VL = VL
 	}
 
-	fi, err := in.Stat()
-	if err != nil {
-		fmt.Println("Error acquiring input file's attributes:", err)
-		os.Exit(1)
-	}
+	buffer := lines.NewBufferFromFile(in.Name())
+	defer buffer.Close()
 
-	p := tea.NewProgram(model.InitialModel(in, fi.Size()), tea.WithAltScreen())
-	defer tea.ClearScreen()
+	p := tea.NewProgram(model.InitialModel(buffer), tea.WithAltScreen())
+	defer tea.ExitAltScreen()
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error rendering the TUI: %v", err)
 		os.Exit(1)

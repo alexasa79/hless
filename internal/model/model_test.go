@@ -1,15 +1,14 @@
 package model
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/alexasa79/hless/internal/lines"
-	"github.com/alexasa79/hless/internal/utils"
 )
 
 func createModel(s string, w int, h int) *Model {
-	m := InitialModel(strings.NewReader(s), utils.Len64(s))
+	b := lines.NewBufferFromString(s)
+	m := InitialModel(b)
 	m.width = w
 	m.height = h
 	m.ready = true

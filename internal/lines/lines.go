@@ -2,7 +2,6 @@ package lines
 
 import (
 	"fmt"
-	"io"
 	"math"
 	"sync"
 
@@ -15,26 +14,47 @@ var LL *hhlog.Logger
 var mx sync.Mutex
 
 func SectionComp(a, b *Section) int {
-	if a.offset < b.offset {
+	if a.read.start < b.read.start {
 		return -1
-	} else if a.offset == b.offset {
+	} else if a.read.start == b.read.start {
 		return 0
 	} else {
 		return 1
 	}
 }
 
+// Class representing a range of lines, relative to Buffer.
+type Range struct {
+	start int64
+	end   int64
+}
+
 type Section struct {
-	offset int64
-	name   string
+	name string
 
-	data        []byte
-	parsedStart int // first parsed byte
-	parsedEnd   int // last parsed byte
-	lines       int // how many lines we found
+	read  Range // Range in the Buffer we scanned looking for lines
+	lines int64 // how many lines we found
 
-	nextIndexForward  int
-	nextIndexBackward int
+	nextIndexForward  int64
+	nextIndexBackward int64
+}
+
+type Line struct {
+	Offset    int64
+	len       int64 // length of text
+	index     int64 // index in section
+	rawLength int64 // raw length, with end of line
+	section   *Section
+}
+
+type Lines struct {
+	data *Buffer
+	eof  bool
+
+	lines    *avltree.AVLTree[*Line]
+	sections *avltree.AVLTree[*Section]
+
+	currentSection *Section
 }
 
 func LineComp(a, b *Line) int {
@@ -47,44 +67,20 @@ func LineComp(a, b *Line) int {
 	}
 }
 
-type Line struct {
-	Offset    int64
-	len       int // length of text
-	index     int // index in section
-	rawLength int // raw length, with end of line
-	section   *Section
-}
-
-type Lines struct {
-	file     io.ReadSeeker
-	fileSize int64
-	eof      bool
-
-	batchSize int
-
-	lines    *avltree.AVLTree[*Line]
-	sections *avltree.AVLTree[*Section]
-
-	currentSection *Section
-}
-
 func newSection(offset int64, name string) *Section {
 	return &Section{
-		data:              make([]byte, 0),
-		offset:            offset,
 		name:              name,
 		nextIndexForward:  1,
 		nextIndexBackward: -1,
+		read:              Range{start: offset, end: offset},
 	}
 }
 
-func NewLines(file io.ReadSeeker, fileSize int64) *Lines {
+func NewLines(data *Buffer) *Lines {
 	lines := &Lines{
-		file:     file,
-		fileSize: fileSize,
-		eof:      false,
+		data: data,
 
-		batchSize: 65536,
+		eof: false,
 
 		lines:    avltree.NewAVLTree[*Line](LineComp),
 		sections: avltree.NewAVLTree[*Section](SectionComp),
@@ -99,56 +95,34 @@ func NewLines(file io.ReadSeeker, fileSize int64) *Lines {
 	return lines
 }
 
-func (lines Line) String() string {
-	mx.Lock()
-	defer mx.Unlock()
-
+func (line Line) String() string {
 	return fmt.Sprintf("[Line: @%d, len=%d, rlen=%d, index=%d, sec=%p]",
-		lines.Offset, lines.len, lines.rawLength, lines.index, lines.section)
+		line.Offset, line.len, line.rawLength, line.index, line.section)
 }
 
 func (s Section) String() string {
-	mx.Lock()
-	defer mx.Unlock()
-
-	return fmt.Sprintf("[Section: @%p, offset=%d, name=%s, lines=%d, buf=%d, parsed=%d,%d, index=%d,%d]",
-		&s, s.offset, s.name, s.lines, len(s.data), s.parsedStart, s.parsedEnd,
-		s.nextIndexForward, s.nextIndexBackward)
-
-}
-
-func (lines *Lines) FileSize() int64 {
-	return lines.fileSize
+	return fmt.Sprintf("[Section: name=%s, lines=%d, read=%d,%d index=%d,%d]",
+		s.name, s.lines, s.read.start, s.read.end, s.nextIndexForward, s.nextIndexBackward)
 }
 
 func (lines *Lines) readForward() {
-	buf := make([]byte, lines.batchSize)
-
 	s := lines.currentSection
-	lines.file.Seek(s.offset+utils.Len64(s.data), io.SeekStart)
 
-	LL.Debug("Reading forward in section %v from offset %d", s, s.offset+utils.Len64(s.data))
+	LL.Debug("Reading forward in section %v from offset %d", s, s.read.end)
 
-	n, err := lines.file.Read(buf)
-	if err != nil {
-		return
-	}
-
-	LL.Debug("Read %d bytes", n)
-
-	s.data = append(s.data, buf[:n]...)
-	for i := s.parsedEnd; i < len(s.data); i++ {
-		if s.data[i] == '\n' { // 123\n
-			len := i - s.parsedEnd
-			if i > 0 && s.data[i-1] == '\r' {
+	pos := s.read.end
+	for pos < lines.data.Size() {
+		if lines.data.At(pos) == '\n' {
+			len := pos - s.read.end
+			if pos > 0 && lines.data.At(pos-1) == '\r' {
 				len--
 			}
 
 			line := Line{
-				Offset:    int64(s.parsedEnd) + s.offset,
+				Offset:    s.read.end,
 				len:       len,
 				index:     s.nextIndexForward,
-				rawLength: i - s.parsedEnd + 1,
+				rawLength: pos - s.read.end + 1,
 				section:   lines.currentSection,
 			}
 
@@ -156,50 +130,41 @@ func (lines *Lines) readForward() {
 
 			s.lines++
 			s.nextIndexForward++
-			s.parsedEnd = i + 1
 
 			LL.Trace("Added line %v", line)
+			break
 		}
+		pos++
 	}
+	s.read.end = pos + 1
 
 	LL.Debug("Section after reading %v", s)
 }
 
 func (lines *Lines) readBackward() {
 	s := lines.currentSection
-	if s.offset == 0 && s.parsedStart == 0 {
+	if s.read.start == 0 {
 		return
 	}
 
-	batchSize := utils.Min(int64(lines.batchSize), s.offset)
-	s.offset -= batchSize
-	lines.file.Seek(s.offset, io.SeekStart)
+	LL.Debug("Reading backward in section %v from offset %d", s, s.read.start)
 
-	LL.Debug("Reading backward in section %v from offset %d", s, s.offset)
-
-	buf := make([]byte, batchSize)
-	n, err := lines.file.Read(buf)
-	if err != nil {
-		return
-	}
-
-	LL.Debug("Read %d bytes", n)
-
-	s.data = append(buf[:n], s.data...)
-	s.parsedStart += n
-	s.parsedEnd += n
-	for i := s.parsedStart - 1; i >= 0; i-- {
-		len := s.parsedStart - i - 1
-		if s.data[i] == '\n' && len > 0 {
-			if s.data[i+len-1] == '\r' {
+	// s.read.start points at the first character in the last line found string.
+	// Decrementing pos by 1 will get us to point at the \n. Decrementing once again will
+	// get us to look at the last character in the line we're reading.
+	pos := s.read.start - 2
+	for pos >= 0 {
+		if lines.data.At(pos) == '\n' {
+			len := s.read.start - pos - 2
+			if pos > 0 && lines.data.At(pos-1) == '\r' {
 				len--
 			}
 
 			line := Line{
-				Offset:    int64(i) + s.offset + 1,
-				len:       len - 1,
+				Offset:    pos + 1,
+				len:       len,
 				index:     s.nextIndexBackward,
-				rawLength: s.parsedStart - i - 1,
+				rawLength: s.read.start - pos - 1,
 				section:   lines.currentSection,
 			}
 
@@ -207,15 +172,16 @@ func (lines *Lines) readBackward() {
 
 			s.lines++
 			s.nextIndexBackward--
-			s.parsedStart = i + 1
 
 			LL.Trace("Added line %v", line)
+			break
 		}
+		pos--
 	}
 
-	if s.offset == 0 {
-		len := s.parsedStart - 1
-		if s.data[len-1] == '\r' {
+	if pos < 0 {
+		len := s.read.start - 1
+		if lines.data.At(len-1) == '\r' {
 			len--
 		}
 
@@ -223,7 +189,7 @@ func (lines *Lines) readBackward() {
 			Offset:    0,
 			len:       len,
 			index:     s.nextIndexBackward,
-			rawLength: s.parsedStart,
+			rawLength: s.read.start,
 			section:   lines.currentSection,
 		}
 
@@ -231,53 +197,76 @@ func (lines *Lines) readBackward() {
 
 		s.lines++
 		s.nextIndexBackward--
-		s.parsedStart = 0
 
 		LL.Trace("Added line %v", line)
 	}
 
+	s.read.start = pos + 1
+
 	LL.Debug("Section after reading %v", s)
+}
+
+func (lines *Lines) first(iteration int) *Line {
+	utils.Assert(iteration < 100)
+
+	lines.jumpTo(0, "")
+	t := lines.lines.Get(&Line{Offset: 0})
+	if t != nil {
+		return *t
+	} else {
+		lines.readForward()
+		return lines.first(iteration + 1)
+	}
 }
 
 func (lines *Lines) First() *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	lines.jumpTo(0, "")
-	lines.readForward()
-	t := lines.lines.Get(&Line{Offset: 0})
-	if t != nil {
+	res := lines.first(0)
+	LL.Debug("Asked to return the first line. Returning %v", res)
+	return res
+}
+
+func (lines *Lines) last(iteration int) *Line {
+	utils.Assert(iteration < 100)
+
+	size := lines.data.Size()
+	lines.jumpTo(size, "end")
+	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
+	if t != nil && (*t).Offset+(*t).rawLength >= size {
 		return *t
+	} else {
+		lines.readBackward()
+		return lines.last(iteration + 1)
 	}
-	return nil
 }
 
 func (lines *Lines) Last() *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	lines.jumpTo(lines.fileSize, "end")
-	lines.readBackward()
-	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
-	if t != nil {
-		return *t
-	}
-	return nil
+	res := lines.last(0)
+	LL.Debug("Asked to return last line. Returning %v", res)
+	return res
 }
 
 func (lines *Lines) moveToSection(line *Line, section *Section) {
 	utils.Assert(line.section != section)
 
 	// Works only if the line is at the beginning of its section or at the end of its section.
-	s2 := line.section
-	utils.Assert(int64(s2.parsedStart)+s2.offset == line.Offset ||
-		int64(s2.parsedEnd)+s2.offset == line.Offset+int64(line.rawLength),
-		section, line, s2)
+	// s2 := line.section
+	// utils.Assert(
+	// 	// Line at the beginning ot its section
+	// 	s2.parsed.start == line.Offset ||
+	// 		// Line at the end of its section
+	// 		s2.parsed.end == line.Offset+line.rawLength,
+	// 	section, line, s2)
 
-	if int64(s2.parsedStart)+s2.offset == line.Offset {
-		// The line is the first in its section. We have to trim the section's buffer and
-		// (parsedStart, parsedEnd)
-	}
+	// if int64(s2.parsed.start)+s2.offset == line.Offset {
+	// 	// The line is the first in its section. We have to trim the section's buffer and
+	// 	// (parsedStart, parsedEnd)
+	// }
 }
 
 func (lines *Lines) next(line *Line, iterations int) *Line {
@@ -287,7 +276,7 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 		return nil
 	}
 
-	if line.Offset+int64(line.rawLength) >= lines.fileSize {
+	if line.Offset+int64(line.rawLength) >= lines.data.Size() {
 		return nil
 	}
 
@@ -370,7 +359,7 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 }
 
 func (lines *Lines) jumpTo(offset int64, name string) {
-	s := Section{offset: offset}
+	s := Section{read: Range{start: offset, end: offset}}
 	t := lines.sections.Get(&s)
 	if t != nil {
 		lines.currentSection = *t
@@ -380,7 +369,10 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 	t = lines.sections.Predecessor(&s)
 	if t != nil {
 		pred := *t
-		if offset >= pred.offset && offset <= pred.offset+utils.Len64(pred.data) {
+		if offset >= pred.read.start && offset < pred.read.end {
+			lines.currentSection = pred
+			return
+		} else if offset == pred.read.end {
 			lines.currentSection = pred
 			return
 		}
@@ -401,14 +393,10 @@ func (lines *Lines) JumpTo(offset int64, name string) {
 	lines.jumpTo(offset, name)
 }
 
-func (line *Line) Text() string {
+func (lines *Lines) Text(line *Line) string {
 	mx.Lock()
 	defer mx.Unlock()
-
-	s := line.section
-	start := int(line.Offset - s.offset)
-	end := start + line.len
-	return string(s.data[start:end])
+	return string(lines.data.Range(line.Offset, line.Offset+line.len))
 }
 
 func (lines *Line) Name() string {
