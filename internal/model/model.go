@@ -215,6 +215,7 @@ func InitialModel(b *lines.Buffer) *Model {
 		History: History{},
 	}
 
+	m.search = len(m.searches) - 1
 	m.cursorLine = m.lines.First()
 	m.top.Line = m.cursorLine
 
@@ -915,7 +916,7 @@ func (m *Model) renderProgress() string {
 func (m *Model) renderSearchBar() string {
 	res := ""
 
-	text := "Tab: (regex/plain)  F2/F4: Next/Prev  Ctrl+n: Next empty"
+	text := "Tab: (regex/plain)  F2/F4: Next/Prev"
 	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
 
 	prompt := fmt.Sprintf("%d: ", m.search+1)
@@ -980,12 +981,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 				}
 
-				if m.activeSearchDirectionDown {
-					cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
-					cmds = append(cmds, cmd)
-				} else {
-					cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
-					cmds = append(cmds, cmd)
+				if m.newSearch.pattern != "" {
+					if m.activeSearchDirectionDown {
+						cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+						cmds = append(cmds, cmd)
+					} else {
+						cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+						cmds = append(cmds, cmd)
+					}
 				}
 			} else if k == "tab" {
 				m.newSearch.regex = !m.newSearch.regex
@@ -1018,19 +1021,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.newSearch = m.searches[m.search]
 					m.textbox.SetValue(m.newSearch.pattern)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
-				}
-			} else if k == "ctrl+n" {
-				next := (m.search + 1) % len(m.searches)
-				for i := 0; i < len(m.searches); i++ {
-					if m.searches[next].pattern == "" {
-						break
-					}
-					next = (next + 1) % len(m.searches)
-				}
-				if next != m.search {
-					m.search = next
-					m.newSearch = m.searches[m.search]
-					m.textbox.SetValue(m.newSearch.pattern)
 				}
 			} else {
 				m.textbox, cmd = m.textbox.Update(msg)
@@ -1120,6 +1110,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if k == "/" || k == "?" {
+				m.search = (m.search + 1) % len(m.searches)
+				m.newSearch = m.searches[m.search]
+				m.textbox.SetValue(m.newSearch.pattern)
+				m.textbox.SetCursor(len(m.newSearch.pattern))
+
 				m.activeSearchTextbox = true
 				cmds = append(cmds, m.textbox.Focus())
 				cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
