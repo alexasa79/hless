@@ -943,10 +943,8 @@ func (m *Model) renderGotoBar() string {
 	text := ""
 	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
 
-	prompt := fmt.Sprintf("%d: ", m.search+1)
-
 	m.textbox.Width = m.width
-	m.textbox.Prompt = prompt
+	m.textbox.Prompt = ": "
 	m.textbox.PromptStyle = m.searchStyles[m.search]
 	m.textbox.TextStyle = m.searchStyles[m.search]
 
@@ -989,6 +987,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
 						cmds = append(cmds, cmd)
 					}
+				} else {
+					// Return m.search to the previous value, so that next search will use current
+					// search slot.
+					m.search = (m.search + len(m.searches) - 1) % len(m.searches)
 				}
 			} else if k == "tab" {
 				m.newSearch.regex = !m.newSearch.regex
@@ -1129,6 +1131,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if k == ":" {
 				m.activeGotoTextbox = true
+
+				m.textbox.SetValue("")
+				m.textbox.Prompt = ""
+
 				cmds = append(cmds, m.textbox.Focus())
 				cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
 			}
