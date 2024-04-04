@@ -71,7 +71,7 @@ func newSection(offset int64, name string) *Section {
 	return &Section{
 		name:              name,
 		nextIndexForward:  1,
-		nextIndexBackward: -1,
+		nextIndexBackward: 0,
 		read:              Range{start: offset, end: offset},
 	}
 }
@@ -399,15 +399,20 @@ func (lines *Lines) Text(line *Line) string {
 	return string(lines.data.Range(line.Offset, line.Offset+line.len))
 }
 
-func (lines *Line) Name() string {
+func (line *Line) Name() string {
 	mx.Lock()
 	defer mx.Unlock()
 
-	s := lines.section
+	s := line.section
 	if s.name == "" {
-		return fmt.Sprintf("%d", lines.index)
+		return fmt.Sprintf("%d", line.index)
 	}
-	t := fmt.Sprintf("%s%+d", s.name, lines.index)
+	var t string
+	if line.index == 0 {
+		t = s.name
+	} else {
+		t = fmt.Sprintf("%s%+d", s.name, line.index)
+	}
 	return t
 }
 
