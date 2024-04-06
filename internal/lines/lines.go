@@ -393,9 +393,57 @@ func (lines *Lines) JumpTo(offset int64, name string) {
 	lines.jumpTo(offset, name)
 }
 
+func (lines *Lines) At(offset int64, name string) *Line {
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.jumpTo(offset, name)
+
+	s := lines.currentSection
+
+	t := lines.lines.Predecessor(&Line{Offset: offset})
+	if t != nil && (*t).section == s {
+		LL.Debug("Asked for line at offset of %d, with section name %s. Returning %+v",
+			offset, name, *t)
+		return *t
+	}
+
+	LL.Debug("Reading around in section %v from offset %d", s, s.read.end)
+
+	// Read back until we run into end of line. Then read forward...
+	pos := offset
+	for pos >= 0 {
+		if lines.data.At(pos) == '\n' {
+			pos++
+			break
+		}
+		pos--
+	}
+
+	// Making sure that next line we add in readForward will get index 0. Forward index
+	// is set to 1 by default to accomodate the first section. This does not work for
+	// sections we add in the middle of the file.
+	s.nextIndexForward = 0
+	s.nextIndexBackward = -1
+
+	s.read = Range{pos, pos}
+	lines.readForward()
+
+	t = lines.lines.Predecessor(&Line{Offset: offset})
+	utils.Assert(t != nil, offset, name)
+
+	LL.Debug("Section after reading %v", s)
+
+	LL.Debug("Asked for line at offset of %d, with section name %s. Returning %+v",
+		offset, name, *t)
+
+	return *t
+}
+
 func (lines *Lines) Text(line *Line) string {
 	mx.Lock()
 	defer mx.Unlock()
+
 	return string(lines.data.Range(line.Offset, line.Offset+line.len))
 }
 

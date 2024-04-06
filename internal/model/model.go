@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/alexasa79/hless/internal/avltree"
 	"github.com/alexasa79/hless/internal/hhlog"
+	"github.com/alexasa79/hless/internal/jumpparser"
 	"github.com/alexasa79/hless/internal/lines"
 	"github.com/alexasa79/hless/internal/utils"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -150,6 +150,8 @@ var searchBackwardRunes = map[string]int{
 	"*": 7,
 	"(": 8,
 }
+
+var chk = utils.Check
 
 func int64Comp(a, b int64) int {
 	if a < b {
@@ -953,6 +955,24 @@ func (m *Model) renderGotoBar() string {
 	return res
 }
 
+func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
+	if j.Offset != nil {
+		if *j.Offset == 100 {
+			m.cursorLine = m.lines.At(m.buffer.Size(), "end")
+		} else {
+			where := float64(m.buffer.Size()) * *j.Offset / 100
+			m.cursorLine = m.lines.At(int64(where), fmt.Sprintf("%f%%", *j.Offset))
+		}
+	}
+
+	if j.Lines != nil {
+		m.gotoLine = int64(*j.Lines)
+		return m.startProgress("Counting", m.gotoWithProgress())
+	}
+
+	return nil
+}
+
 func (m *Model) Init() tea.Cmd {
 	return nil
 }
@@ -967,7 +987,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		k := msg.String()
 
-		if m.activeSearchTextbox {
+		if m.activeGotoTextbox {
+			if k == "esc" || k == "ctrl+c" {
+				m.textbox.SetValue("")
+				m.activeGotoTextbox = false
+				m.textbox.Blur()
+			} else if k == "enter" {
+				m.activeGotoTextbox = false
+				m.textbox.Blur()
+
+				j, err := jumpparser.Parse(m.textbox.Value())
+				if err != nil {
+					m.setError(fmt.Sprintf("%s", err))
+				} else {
+					cmd = m.jumpTo(j)
+					cmds = append(cmds, cmd)
+				}
+
+			} else {
+				m.textbox, cmd = m.textbox.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+		} else if m.activeSearchTextbox {
 			if k == "enter" {
 				m.activeSearchTextbox = false
 				m.textbox.Blur()
@@ -1024,27 +1065,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textbox.SetValue(m.newSearch.pattern)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
 				}
-			} else {
-				m.textbox, cmd = m.textbox.Update(msg)
-				cmds = append(cmds, cmd)
-			}
-		} else if m.activeGotoTextbox {
-			if k == "esc" || k == "ctrl+c" {
-				m.textbox.SetValue("")
-				m.activeGotoTextbox = false
-				m.textbox.Blur()
-			} else if k == "enter" {
-				m.activeGotoTextbox = false
-				m.textbox.Blur()
-
-				num, err := strconv.Atoi(m.textbox.Value())
-				if err != nil {
-					break
-				}
-				m.gotoLine = int64(num)
-
-				cmd = m.startProgress("Scanning", m.gotoWithProgress())
-				cmds = append(cmds, cmd)
 			} else {
 				m.textbox, cmd = m.textbox.Update(msg)
 				cmds = append(cmds, cmd)

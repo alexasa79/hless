@@ -12,7 +12,7 @@ import (
 
 func Sprint64(n int64) string {
 	p := message.NewPrinter(language.English)
-    return p.Sprintf("%d", n)
+	return p.Sprintf("%d", n)
 }
 
 func Min[T constraints.Ordered](a, b T) T {
@@ -42,5 +42,11 @@ func Assert(cond bool, args ...interface{}) {
 			meta += fmt.Sprintf("%+v\n", arg)
 		}
 		panic(fmt.Sprintf("Assertion violation at %s:%d, meta=\n%s", file, line, meta))
+	}
+}
+
+func Check(err error) {
+	if err != nil {
+		panic(err)
 	}
 }

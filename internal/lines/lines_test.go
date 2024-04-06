@@ -236,3 +236,24 @@ func TestJumpTo2(t *testing.T) {
 
 	utils.Assert(lines.sections.Count() == 2)
 }
+
+func TestAt1(t *testing.T) {
+	s := "01\n345\n678\n"
+	lines := NewLines(NewBufferFromString(s))
+
+	l := lines.At(4, "at 4")
+	utils.Assert(l != nil)
+	utils.Assert(lines.Text(l) == "345")
+	utils.Assert(l.Offset == 3)
+	utils.Assert(l.Name() == "at 4")
+
+	l2 := lines.Next(l)
+	utils.Assert(lines.Text(l2) == "678")
+	utils.Assert(l2 != nil)
+	utils.Assert(l2.Name() == "at 4+1")
+
+	l3 := lines.Prev(l)
+	utils.Assert(lines.Text(l3) == "01")
+	utils.Assert(l3 != nil)
+	utils.Assert(l3.Name() == "at 4-1")
+}
