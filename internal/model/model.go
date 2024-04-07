@@ -487,15 +487,19 @@ func (m *Model) searchScreen(search int, from *lines.Line, howMany int) *lines.L
 
 func (m *Model) findNextWithProgress(search int) tea.Cmd {
 	searchLine := m.lines.Next(m.cursorLine)
-	if searchLine == nil {
-		return nil
-	}
 	lastProgress := float64(0)
 
 	SL.Info("Searching forward from %v", searchLine)
 
 	return func() tea.Msg {
 		SL.Debug("Callback called for %v", searchLine)
+
+		if searchLine == nil {
+			return ProgressReport{
+				progress:    1.0,
+				interrupted: true,
+			}
+		}
 
 		// One of two things can happen. Either we already read to the end of the file.
 		// In this case we set the progress based on the current search line out of total
@@ -562,15 +566,19 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 
 func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 	searchLine := m.lines.Prev(m.cursorLine)
-	if searchLine == nil {
-		return nil
-	}
 	lastProgress := float64(0)
 
 	SL.Info("Searching backwards from %v", searchLine)
 
 	return func() tea.Msg {
 		SL.Debug("Callback called for %v", searchLine)
+
+		if searchLine == nil {
+			return ProgressReport{
+				progress:    0,
+				interrupted: true,
+			}
+		}
 
 		// One of two things can happen. Either we already read to the end of the file.
 		// In this case we set the progress based on the current search line out of total
