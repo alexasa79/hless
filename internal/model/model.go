@@ -757,14 +757,19 @@ func (m *Model) prevMark() {
 func (m *Model) segmentize(l *lines.Line) []string {
 	line := m.lines.Text(l)
 	res := make([]string, 0)
-	for line != "" {
-		l := utils.Min(m.width, len(line))
-		seg := line[:l]
-		if len(seg) < m.width {
-			seg = fmt.Sprintf("%-*s", m.width, seg)
-		}
+	if line == "" {
+		seg := fmt.Sprintf("%-*s", m.width, " ")
 		res = append(res, seg)
-		line = line[l:]
+	} else {
+		for line != "" {
+			l := utils.Min(m.width, len(line))
+			seg := line[:l]
+			if len(seg) < m.width {
+				seg = fmt.Sprintf("%-*s", m.width, seg)
+			}
+			res = append(res, seg)
+			line = line[l:]
+		}
 	}
 	return res
 }
