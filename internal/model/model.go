@@ -840,13 +840,11 @@ func (m *Model) renderStatusBar() string {
 	succ := m.marks.Successor(m.cursorLine)
 
 	ll := ""
-	// if m.lines.Eof() {
-	// 	lines = fmt.Sprintf("Line %s/%s  Size %s bytes",
-	// 		m.cursorLine.Name, utils.Sprint64(m.lines.Nlines()),
-	// 		utils.Sprint64(m.lines.FileSize()))
-	// } else {
 	ll = fmt.Sprintf("Line %s/∞ ", m.cursorLine.Name())
-	// }
+	tt := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
+	if tt != nil {
+		ll += tt.String()
+	}
 
 	ms := make([]string, 0)
 	if pred != nil {
@@ -884,20 +882,18 @@ func (m *Model) renderStatusBar() string {
 
 			sh := make([]string, 0)
 			if pred != nil {
-				r := m.searchRanges[i].Predecessor(SearchRange{(*pred).Offset, 0})
-				if r != nil && (*pred).Offset >= r.start && (*pred).Offset < r.end {
-					sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
-				} else {
-					sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
+				sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
+				ttt := utils.ExtractTimestamp(m.lines.Text(*pred))
+				if ttt != nil && tt != nil {
+					sh = append(sh, (tt.Sub(*ttt).String()))
 				}
 			}
 
 			if succ != nil {
-				r := m.searchRanges[i].Predecessor(SearchRange{(*succ).Offset, 0})
-				if r != nil && (*succ).Offset >= r.start && (*succ).Offset < r.end {
-					sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
-				} else {
-					sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+				sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+				ttt := utils.ExtractTimestamp(m.lines.Text(*succ))
+				if ttt != nil && tt != nil {
+					sh = append(sh, (ttt.Sub(*tt).String()))
 				}
 			}
 

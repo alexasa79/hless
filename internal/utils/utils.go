@@ -3,7 +3,10 @@ package utils
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"runtime"
+	"strings"
+	"time"
 
 	"golang.org/x/exp/constraints"
 	"golang.org/x/text/language"
@@ -49,4 +52,32 @@ func Check(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func ExtractTimestamp(input string) (*time.Time) {
+	regex := `^(\d{4}-\d{2}-\d{2})T(\d{2}[-:]\d{2}[-:]\d{2}\.\d+)?(Z|[+-]\d{2}:?\d{2})?.*`
+	r := regexp.MustCompile(regex)
+
+	matches := r.FindStringSubmatch(input)
+	if matches == nil || len(matches) != 4 {
+		return nil
+	}
+
+	ts := matches[1]
+	ts += "T"
+	ts += strings.ReplaceAll(matches[2], "-", ":")
+	ts += strings.Repeat("0", 18 - len(matches[2]))
+	tz := strings.ReplaceAll(matches[3], "Z", "+")
+	if tz != "" && tz != "+" {
+		ts += tz
+	} else {
+		ts += "+00:00"
+	}
+
+	res, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	return &res
 }
