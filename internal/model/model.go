@@ -395,23 +395,25 @@ func (m *Model) onToggleMark() {
 func (m *Model) searchMatches(line string, pat string, regex bool) []SearchResult {
 	res := make([]SearchResult, 0)
 
-	if regex {
-		re := regexp.MustCompile(pat)
-		matches := re.FindAllStringIndex(line, -1)
-		for _, match := range matches {
-			res = append(res, SearchResult{start: match[0], end: match[1]})
-		}
-	} else {
-		start := 0
-		for {
-			index := strings.Index(line[start:], pat)
-			if index == -1 {
-				break
+	if pat != "" {
+		if regex {
+			re := regexp.MustCompile(pat)
+			matches := re.FindAllStringIndex(line, -1)
+			for _, match := range matches {
+				res = append(res, SearchResult{start: match[0], end: match[1]})
 			}
-			matchStart := start + index
-			matchEnd := matchStart + len(pat)
-			res = append(res, SearchResult{start: matchStart, end: matchEnd})
-			start = matchEnd
+		} else {
+			start := 0
+			for {
+				index := strings.Index(line[start:], pat)
+				if index == -1 {
+					break
+				}
+				matchStart := start + index
+				matchEnd := matchStart + len(pat)
+				res = append(res, SearchResult{start: matchStart, end: matchEnd})
+				start = matchEnd
+			}
 		}
 	}
 
@@ -489,12 +491,12 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 	searchLine := m.lines.Next(m.cursorLine)
 	lastProgress := float64(0)
 
-	SL.Info("Searching forward from %v", searchLine)
+	SL.Info("Searching forward from %v. Looking for %v", searchLine, m.searches[search])
 
 	return func() tea.Msg {
 		SL.Debug("Callback called for %v", searchLine)
 
-		if searchLine == nil {
+		if searchLine == nil || m.searches[search].pattern == "" {
 			return ProgressReport{
 				progress:    1.0,
 				interrupted: true,
@@ -568,12 +570,12 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 	searchLine := m.lines.Prev(m.cursorLine)
 	lastProgress := float64(0)
 
-	SL.Info("Searching backwards from %v", searchLine)
+	SL.Info("Searching backwards from %v. Searching for %v", searchLine, m.searches[search])
 
 	return func() tea.Msg {
 		SL.Debug("Callback called for %v", searchLine)
 
-		if searchLine == nil {
+		if searchLine == nil || m.searches[search].pattern == "" {
 			return ProgressReport{
 				progress:    0,
 				interrupted: true,
