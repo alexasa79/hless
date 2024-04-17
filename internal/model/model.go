@@ -217,7 +217,7 @@ func InitialModel(b *lines.Buffer) *Model {
 		History: History{},
 	}
 
-	m.search = len(m.searches) - 1
+	m.search = 0
 	m.cursorLine = m.lines.First()
 	m.top.Line = m.cursorLine
 
@@ -1031,18 +1031,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 				}
 
-				if m.newSearch.pattern != "" {
-					if m.activeSearchDirectionDown {
-						cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
-						cmds = append(cmds, cmd)
-					} else {
-						cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
-						cmds = append(cmds, cmd)
-					}
+				if m.activeSearchDirectionDown {
+					cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+					cmds = append(cmds, cmd)
 				} else {
-					// Return m.search to the previous value, so that next search will use current
-					// search slot.
-					m.search = (m.search + len(m.searches) - 1) % len(m.searches)
+					cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+					cmds = append(cmds, cmd)
 				}
 			} else if k == "tab" {
 				m.newSearch.regex = !m.newSearch.regex
@@ -1143,7 +1137,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if k == "/" || k == "?" {
-				m.search = (m.search + 1) % len(m.searches)
+				if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
+					m.search = (m.search + 1) % len(m.searches)
+				}
+
 				m.newSearch = m.searches[m.search]
 				m.textbox.SetValue(m.newSearch.pattern)
 				m.textbox.SetCursor(len(m.newSearch.pattern))
