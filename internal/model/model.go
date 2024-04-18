@@ -851,17 +851,29 @@ func (m *Model) renderStatusBar() string {
 	ms := make([]string, 0)
 	if pred != nil {
 		ms = append(ms, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
+		ttt := utils.ExtractTimestamp(m.lines.Text(*pred))
+		if tt != nil && ttt != nil {
+			ms = append(ms, (*tt).Sub(*ttt).String())
+		}
 	}
 	if cont {
 		ms = append(ms, "†")
 	}
 	if succ != nil {
 		ms = append(ms, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
+		ttt := utils.ExtractTimestamp(m.lines.Text(*succ))
+		if tt != nil && ttt != nil {
+			ms = append(ms, (*ttt).Sub(*tt).String())
+		}
 	}
 	marks := strings.Join(ms, " ")
 
 	rest := fmt.Sprintf("%-*s",
 		m.width-(utf8.RuneCountInString(ll)+utf8.RuneCountInString(marks)), "")
+
+	if marks != "" {
+		ll += " "
+	}
 
 	st1 := m.statusStyle.Render(ll)
 	st1 += m.markStyle.Render(marks)
