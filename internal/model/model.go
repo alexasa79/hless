@@ -9,13 +9,24 @@ import (
 	"unicode/utf8"
 
 	"github.com/alexasa79/hless/internal/avltree"
+	"github.com/alexasa79/hless/internal/help"
 	"github.com/alexasa79/hless/internal/hhlog"
 	"github.com/alexasa79/hless/internal/jumpparser"
 	"github.com/alexasa79/hless/internal/lines"
 	"github.com/alexasa79/hless/internal/utils"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+)
+
+type SearchDirection int
+
+const (
+	SEARCH_DOWN    = SearchDirection(iota)
+	SEARCH_UP      = SearchDirection(1)
+	SEARCH_NOWHERE = SearchDirection(2)
 )
 
 type Position struct {
@@ -97,10 +108,10 @@ type Model struct {
 
 	searchStyles [9]lipgloss.Style
 
-	activeSearchTextbox       bool
-	activeSearchDirectionDown bool
-	textbox                   textinput.Model
-	newSearch                 Search
+	activeSearchTextbox   bool
+	activeSearchDirection SearchDirection
+	textbox               textinput.Model
+	newSearch             Search
 
 	searches     [9]Search
 	searchHits   [9]*avltree.AVLTree[*lines.Line]
@@ -121,6 +132,10 @@ type Model struct {
 	errorTimeoutScheduled bool
 
 	History History
+
+	helpActive   bool
+	helpMarkdownRenderer *glamour.TermRenderer
+	helpViewport viewport.Model
 }
 
 var ML *hhlog.Logger
@@ -215,6 +230,8 @@ func InitialModel(b *lines.Buffer) *Model {
 		textbox: textinput.New(),
 
 		History: History{},
+
+		helpViewport: viewport.New(0, 0),
 	}
 
 	m.search = 0
@@ -913,7 +930,17 @@ func (m *Model) renderStatusBar() string {
 
 			sh = append(sh, fmt.Sprintf("◎%d", m.searchHits[i].Count()))
 
-			st2 += m.searchStyles[i].Render(strings.Join(sh, " "))
+			text := strings.Join(sh, " ")
+
+			if i == m.search {
+				m.searchStyles[i].Bold(true)
+				m.searchStyles[i].Underline(true)
+			}
+
+			st2 += m.searchStyles[i].Render(text)
+			m.searchStyles[i].Bold(false)
+			m.searchStyles[i].Underline(false)
+
 			st2 += m.statusStyle.Render(" ")
 		}
 
@@ -997,209 +1024,260 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return nil
+	return m.helpViewport.Init()
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmds := make([]tea.Cmd, 0)
 	var cmd tea.Cmd
 
 	ML.Info("Got request %v %v", reflect.TypeOf(msg), msg)
+
+	cmds := make([]tea.Cmd, 0)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		k := msg.String()
 
-		if m.activeGotoTextbox {
-			if k == "esc" || k == "ctrl+c" {
-				m.textbox.SetValue("")
-				m.activeGotoTextbox = false
-				m.textbox.Blur()
-			} else if k == "enter" {
-				m.activeGotoTextbox = false
-				m.textbox.Blur()
+		if m.helpActive && k == "q" {
+			m.helpActive = false
+			break
+		}
 
-				j, err := jumpparser.Parse(m.textbox.Value())
-				if err != nil {
-					m.setError(fmt.Sprintf("%s", err))
+		if m.helpActive {
+			if k == "q" {
+				m.helpActive = false
+				break
+			}
+
+			m.helpViewport, cmd = m.helpViewport.Update(msg)
+			cmds = append(cmds, cmd)
+		} else {
+			if m.activeGotoTextbox {
+				if k == "esc" || k == "ctrl+c" {
+					m.textbox.SetValue("")
+					m.activeGotoTextbox = false
+					m.textbox.Blur()
+				} else if k == "enter" {
+					m.activeGotoTextbox = false
+					m.textbox.Blur()
+
+					j, err := jumpparser.Parse(m.textbox.Value())
+					if err != nil {
+						m.setError(fmt.Sprintf("%s", err))
+					} else {
+						cmd = m.jumpTo(j)
+						cmds = append(cmds, cmd)
+					}
+
 				} else {
-					cmd = m.jumpTo(j)
+					m.textbox, cmd = m.textbox.Update(msg)
 					cmds = append(cmds, cmd)
 				}
+			} else if m.activeSearchTextbox {
+				if k == "enter" {
+					m.activeSearchTextbox = false
+					m.textbox.Blur()
+					m.newSearch.pattern = m.textbox.Value()
+					if m.newSearch.pattern != m.searches[m.search].pattern ||
+						m.newSearch.regex != m.searches[m.search].regex {
+						m.searches[m.search] = m.newSearch
+						m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
+						m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+					}
 
+					if m.activeSearchDirection == SEARCH_DOWN {
+						cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+						cmds = append(cmds, cmd)
+					} else if m.activeSearchDirection == SEARCH_UP {
+						cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+						cmds = append(cmds, cmd)
+					}
+				} else if k == "tab" {
+					m.newSearch.regex = !m.newSearch.regex
+				} else if k == "esc" || k == "ctrl+c" {
+					m.textbox.SetValue(m.searches[m.search].pattern)
+					m.activeSearchTextbox = false
+					m.textbox.Blur()
+				} else if k == "f4" {
+					if m.newSearch.pattern != m.searches[m.search].pattern ||
+						m.newSearch.regex != m.searches[m.search].regex {
+						m.searches[m.search] = m.newSearch
+						m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
+						m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+					}
+					if m.search < len(m.searches)-1 {
+						m.search++
+						m.newSearch = m.searches[m.search]
+						m.textbox.SetValue(m.newSearch.pattern)
+					}
+				} else if k == "f2" {
+					if m.newSearch.pattern != m.searches[m.search].pattern ||
+						m.newSearch.regex != m.searches[m.search].regex {
+						m.searches[m.search] = m.newSearch
+						m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
+						m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+						m.textbox.SetCursor(len(m.newSearch.pattern))
+					}
+					if m.search > 0 {
+						m.search--
+						m.newSearch = m.searches[m.search]
+						m.textbox.SetValue(m.newSearch.pattern)
+						m.textbox.SetCursor(len(m.newSearch.pattern))
+					}
+				} else {
+					m.textbox, cmd = m.textbox.Update(msg)
+					cmds = append(cmds, cmd)
+				}
 			} else {
-				m.textbox, cmd = m.textbox.Update(msg)
-				cmds = append(cmds, cmd)
-			}
-		} else if m.activeSearchTextbox {
-			if k == "enter" {
-				m.activeSearchTextbox = false
-				m.textbox.Blur()
-				m.newSearch.pattern = m.textbox.Value()
-				if m.newSearch.pattern != m.searches[m.search].pattern ||
-					m.newSearch.regex != m.searches[m.search].regex {
-					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
-					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
+				if k == "q" || k == "ctrl+c" {
+					if k == "ctrl+c" && m.inProgress {
+						ML.Debug("Interrupting progress")
+						m.progressInterrupt <- true
+					} else {
+						return m, tea.Quit
+					}
 				}
 
-				if m.activeSearchDirectionDown {
+				if k == "esc" && m.inProgress {
+					m.progressInterrupt <- true
+				}
+
+				if k == "up" || k == "k" {
+					m.onKeyUp()
+				}
+
+				if k == "down" || k == "j" {
+					m.onKeyDown()
+				}
+
+				if k == "g" {
+					m.cursorLine = m.lines.First()
+				}
+
+				if k == "G" {
+					m.cursorLine = m.lines.Last()
+				}
+
+				if k == "pgup" {
+					m.onPageUp()
+				}
+
+				if k == "pgdown" || k == " " {
+					m.onPageDown()
+				}
+
+				if k == "f" {
+					m.onHalfPageDown()
+				}
+
+				if k == "b" {
+					m.onHalfPageUp()
+				}
+
+				if k == "enter" {
+					m.centerCursor()
+				}
+
+				if k == "m" {
+					m.onToggleMark()
+				}
+
+				if k == "." {
+					m.nextMark()
+				}
+
+				if k == "," {
+					m.prevMark()
+				}
+
+				if k == "e" {
+					m.newSearch = m.searches[m.search]
+					m.textbox.SetValue(m.newSearch.pattern)
+					m.textbox.SetCursor(len(m.newSearch.pattern))
+
+					m.activeSearchTextbox = true
+					cmds = append(cmds, m.textbox.Focus())
+					cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
+					m.activeSearchDirection = SEARCH_NOWHERE
+				}
+
+				if k == "f2" {
+					if m.search > 0 {
+						m.search--
+						m.newSearch = m.searches[m.search]
+						m.textbox.SetValue(m.newSearch.pattern)
+						m.textbox.SetCursor(len(m.newSearch.pattern))
+					}
+				}
+
+				if k == "f4" {
+					if m.search < len(m.searches)-1 {
+						m.search++
+						m.newSearch = m.searches[m.search]
+						m.textbox.SetValue(m.newSearch.pattern)
+					}
+				}
+
+				if k == "/" || k == "?" {
+					if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
+						m.search = (m.search + 1) % len(m.searches)
+					}
+
+					m.newSearch = m.searches[m.search]
+					m.textbox.SetValue(m.newSearch.pattern)
+					m.textbox.SetCursor(len(m.newSearch.pattern))
+
+					m.activeSearchTextbox = true
+					cmds = append(cmds, m.textbox.Focus())
+					cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
+					if k == "/" {
+						m.activeSearchDirection = SEARCH_DOWN
+					}
+
+					if k == "?" {
+						m.activeSearchDirection = SEARCH_UP
+					}
+				}
+
+				if k == ":" {
+					m.activeGotoTextbox = true
+
+					m.textbox.SetValue("")
+					m.textbox.Prompt = ""
+
+					cmds = append(cmds, m.textbox.Focus())
+					cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
+				}
+
+				if k == "n" {
 					cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
 					cmds = append(cmds, cmd)
-				} else {
+				}
+
+				if k == "N" {
 					cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
 					cmds = append(cmds, cmd)
 				}
-			} else if k == "tab" {
-				m.newSearch.regex = !m.newSearch.regex
-			} else if k == "esc" || k == "ctrl+c" {
-				m.textbox.SetValue(m.searches[m.search].pattern)
-				m.activeSearchTextbox = false
-				m.textbox.Blur()
-			} else if k == "f4" {
-				if m.newSearch.pattern != m.searches[m.search].pattern ||
-					m.newSearch.regex != m.searches[m.search].regex {
-					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
-					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
-				}
-				if m.search < len(m.searches)-1 {
-					m.search++
-					m.newSearch = m.searches[m.search]
-					m.textbox.SetValue(m.newSearch.pattern)
-				}
-			} else if k == "f2" {
-				if m.newSearch.pattern != m.searches[m.search].pattern ||
-					m.newSearch.regex != m.searches[m.search].regex {
-					m.searches[m.search] = m.newSearch
-					m.searchHits[m.search] = avltree.NewAVLTree(lines.LineComp)
-					m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
-					m.textbox.SetCursor(len(m.newSearch.pattern))
-				}
-				if m.search > 0 {
-					m.search--
-					m.newSearch = m.searches[m.search]
-					m.textbox.SetValue(m.newSearch.pattern)
-					m.textbox.SetCursor(len(m.newSearch.pattern))
-				}
-			} else {
-				m.textbox, cmd = m.textbox.Update(msg)
-				cmds = append(cmds, cmd)
-			}
-		} else {
-			if k == "q" || k == "ctrl+c" {
-				if k == "ctrl+c" && m.inProgress {
-					ML.Debug("Interrupting progress")
-					m.progressInterrupt <- true
-				} else {
-					return m, tea.Quit
-				}
-			}
 
-			if k == "esc" && m.inProgress {
-				m.progressInterrupt <- true
-			}
-
-			if k == "up" || k == "k" {
-				m.onKeyUp()
-			}
-
-			if k == "down" || k == "j" {
-				m.onKeyDown()
-			}
-
-			if k == "g" {
-				m.cursorLine = m.lines.First()
-			}
-
-			if k == "G" {
-				m.cursorLine = m.lines.Last()
-			}
-
-			if k == "pgup" {
-				m.onPageUp()
-			}
-
-			if k == "pgdown" || k == " " {
-				m.onPageDown()
-			}
-
-			if k == "f" {
-				m.onHalfPageDown()
-			}
-
-			if k == "b" {
-				m.onHalfPageUp()
-			}
-
-			if k == "enter" {
-				m.centerCursor()
-			}
-
-			if k == "m" {
-				m.onToggleMark()
-			}
-
-			if k == "." {
-				m.nextMark()
-			}
-
-			if k == "," {
-				m.prevMark()
-			}
-
-			if k == "/" || k == "?" {
-				if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
-					m.search = (m.search + 1) % len(m.searches)
+				if k == "h" {
+					ML.Info("Setting help viewport's text to: %s", help.Text)
+					t, _ := m.helpMarkdownRenderer.Render(help.Text)
+					m.helpViewport.SetContent(t)
+					m.helpActive = true
 				}
 
-				m.newSearch = m.searches[m.search]
-				m.textbox.SetValue(m.newSearch.pattern)
-				m.textbox.SetCursor(len(m.newSearch.pattern))
-
-				m.activeSearchTextbox = true
-				cmds = append(cmds, m.textbox.Focus())
-				cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
-				if k == "/" {
-					m.activeSearchDirectionDown = true
+				if search, ok := searchForwardRunes[k]; ok {
+					if m.searches[search].pattern != "" {
+						cmd = m.startProgress("Searching", m.findNextWithProgress(search))
+						cmds = append(cmds, cmd)
+					}
 				}
 
-				if k == "?" {
-					m.activeSearchDirectionDown = false
-				}
-			}
-
-			if k == ":" {
-				m.activeGotoTextbox = true
-
-				m.textbox.SetValue("")
-				m.textbox.Prompt = ""
-
-				cmds = append(cmds, m.textbox.Focus())
-				cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
-			}
-
-			if k == "n" {
-				cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
-				cmds = append(cmds, cmd)
-			}
-
-			if k == "N" {
-				cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
-				cmds = append(cmds, cmd)
-			}
-
-			if search, ok := searchForwardRunes[k]; ok {
-				if m.searches[search].pattern != "" {
-					cmd = m.startProgress("Searching", m.findNextWithProgress(search))
-					cmds = append(cmds, cmd)
-				}
-			}
-
-			if search, ok := searchBackwardRunes[k]; ok {
-				if m.searches[search].pattern != "" {
-					cmd = m.startProgress("Searching", m.findPrevWithProgress(search))
-					cmds = append(cmds, cmd)
+				if search, ok := searchBackwardRunes[k]; ok {
+					if m.searches[search].pattern != "" {
+						cmd = m.startProgress("Searching", m.findPrevWithProgress(search))
+						cmds = append(cmds, cmd)
+					}
 				}
 			}
 		}
@@ -1215,6 +1293,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.top.Segment = 0
+
+		m.helpViewport, cmd = m.helpViewport.Update(msg)
+		cmds = append(cmds, cmd)
+
+		m.helpViewport.Width = msg.Width
+		m.helpViewport.Height = msg.Height
+		m.helpMarkdownRenderer, _ = glamour.NewTermRenderer(
+			glamour.WithStandardStyle("dark"), glamour.WithWordWrap(msg.Width))
 
 	case ProgressReport:
 		if !msg.interrupted {
@@ -1244,6 +1330,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
+	if m.helpActive {
+		return m.helpViewport.View()
+	}
+
 	h := m.height
 	w := m.width
 	res := ""

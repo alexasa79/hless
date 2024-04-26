@@ -1,6 +1,10 @@
 hless:
 	go build -o hh .
 
+hless-amd64:
+	$(MAKE) clean
+	GOOS=linux GOARCH=amd64 $(MAKE) hless
+
 clean:
 	go clean
 
