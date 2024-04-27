@@ -7,11 +7,15 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/alexasa79/hless/internal/hhlog"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
+
+var UL = hhlog.NewLogger("UTILS")
 
 func Sprint64(n int64) string {
 	p := message.NewPrinter(language.English)
@@ -80,4 +84,25 @@ func ExtractTimestamp(input string) (*time.Time) {
 	}
 
 	return &res
+}
+
+func NthWord(s string, n int) (int, int, error) {
+	wordStarts := make([]int, 0)
+	prev := true
+	counter := 0
+	fields := strings.FieldsFunc(s, func(r rune) bool {
+		space := unicode.IsSpace(r)
+		if !space && prev {
+			wordStarts = append(wordStarts, counter)
+		}
+		counter += 1
+		prev = space
+		return space
+	})
+	UL.Info("Found words: %+v", wordStarts)
+	if n >= len(wordStarts) {
+		return 0, 0, fmt.Errorf("no word")
+	} else {
+		return wordStarts[n], wordStarts[n] + len(fields[n]), nil
+	}
 }

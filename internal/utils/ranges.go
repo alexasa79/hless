@@ -10,7 +10,6 @@ func Intersect(a, b *Range) bool {
     return (*a).Start() <= (*b).End() && (*b).Start() <= (*a).End()
 }
 
-/// Assume sorted, two non overlapping lists of ranges, find
 func RangesProduct(ranges1 []Range, ranges2 []Range) []Range {
 	res := make([]Range, 0)
 
@@ -50,7 +49,7 @@ func RangesProduct(ranges1 []Range, ranges2 []Range) []Range {
 				res = append(res, ranges2[j].Subrange(cursor, end2))
 				cursor = end2
 			} else {
-				res = append(res, ranges1[i].Subrange(cursor, end1))
+				res = append(res, ranges2[j].Subrange(cursor, end1))
 				cursor = end1
 			}
 		} else if cursor >= start1 && cursor < end1 {

@@ -42,5 +42,7 @@ search pattern.
 | e | Edit the current search pattern. |
 | F2 | Switch to the previous search pattern. |
 | F4 | Switch to the next search pattern. |
+| Left | Select the previous word on the current line. |
+| Right | Select the next word on the current line. |
 
 `

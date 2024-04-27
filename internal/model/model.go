@@ -133,9 +133,12 @@ type Model struct {
 
 	History History
 
-	helpActive   bool
+	helpActive           bool
 	helpMarkdownRenderer *glamour.TermRenderer
-	helpViewport viewport.Model
+	helpViewport         viewport.Model
+
+	currentWord      int
+	currentWordStyle lipgloss.Style
 }
 
 var ML *hhlog.Logger
@@ -232,6 +235,12 @@ func InitialModel(b *lines.Buffer) *Model {
 		History: History{},
 
 		helpViewport: viewport.New(0, 0),
+
+		currentWord: -1,
+		currentWordStyle: lipgloss.
+			NewStyle().
+			Background(lipgloss.Color("#ff7777")).
+			Foreground(lipgloss.Color("#ffffff")),
 	}
 
 	m.search = 0
@@ -320,6 +329,7 @@ func (m *Model) scrollOneSegmentDown() {
 }
 
 func (m *Model) onKeyUp() {
+	m.currentWord = -1
 	if m.cursorLine != m.top.Line {
 		m.cursorLine = m.lines.Prev(m.cursorLine)
 	} else {
@@ -337,6 +347,7 @@ func (m *Model) onKeyUp() {
 }
 
 func (m *Model) onKeyDown() {
+	m.currentWord = -1
 	if m.lines.Next(m.cursorLine) != nil {
 		bottomLine, bottomSegment := m.bottomLine()
 		ML.Info("Scrolling down. Top line is %v, cursor %v, bottom %v(%d)",
@@ -357,6 +368,41 @@ func (m *Model) onKeyDown() {
 		if bottomSegment < len(segs)-1 {
 			m.scrollOneSegmentDown()
 		}
+	}
+}
+
+func (m *Model) onKeyLeft() {
+	line := m.lines.Text(m.cursorLine)
+	words := strings.Fields(line)
+	m.currentWord -= 1
+	if m.currentWord < 0 {
+		m.currentWord = len(words) - 1
+	}
+}
+
+func (m *Model) onKeyRight() {
+	line := m.lines.Text(m.cursorLine)
+	words := strings.Fields(line)
+	m.currentWord += 1
+	if m.currentWord >= len(words) {
+		m.currentWord = 0
+	}
+}
+
+func (m *Model) onAddCurrentWord() {
+	if m.currentWord == -1 {
+		return
+	}
+
+	line := m.lines.Text(m.cursorLine)
+	words := strings.Fields(line)
+	word := words[m.currentWord]
+
+	m.searches[m.search].regex = true
+	if m.searches[m.search].pattern == "" {
+		m.searches[m.search].pattern = word
+	} else {
+		m.searches[m.search].pattern += "|" + word
 	}
 }
 
@@ -801,16 +847,26 @@ func (m *Model) segmentize(l *lines.Line) []string {
 	return res
 }
 
-func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
+func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord int, boldStyle *lipgloss.Style) []Cegment {
 	segs := m.segmentize(l)
 	r0 := make([]utils.Range, 0)
 
 	line := m.lines.Text(l)
-
 	start := 0
 	for _, seg := range segs {
 		r0 = append(r0, CegmentRange{start: start, end: start + len(seg), style: baseStyle})
 		start += len(seg)
+	}
+
+	var boldWordStart, boldWordEnd int
+	var err error
+	if boldWord != -1 {
+		boldWordStart, boldWordEnd, err = utils.NthWord(line, boldWord)
+		if err == nil {
+			r2 := make([]utils.Range, 0)
+			r2 = append(r2, CegmentRange{start: boldWordStart, end: boldWordEnd, style: boldStyle})
+			r0 = utils.RangesProduct(r0, r2)
+		}
 	}
 
 	for i := 0; i < len(m.searches); i++ {
@@ -829,6 +885,12 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style) []Cegment {
 		}
 
 		r0 = utils.RangesProduct(r0, r1)
+
+		if boldWord >= 0 {
+			r2 := make([]utils.Range, 0)
+			r2 = append(r2, CegmentRange{start: boldWordStart, end: boldWordEnd, style: boldStyle})
+			r0 = utils.RangesProduct(r0, r2)
+		}
 	}
 
 	res := make([]Cegment, len(segs))
@@ -1279,6 +1341,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						cmds = append(cmds, cmd)
 					}
 				}
+
+				if k == "left" {
+					m.onKeyLeft()
+				}
+
+				if k == "right" {
+					m.onKeyRight()
+				}
+
+				if k == "A" {
+					m.onAddCurrentWord()
+				}
 			}
 		}
 
@@ -1358,12 +1432,12 @@ func (m *Model) View() string {
 
 		var cegs []Cegment
 		if m.cursorLine == current.Line {
-			cegs = m.cegmentize(current.Line, &m.cursorStyle)
+			cegs = m.cegmentize(current.Line, &m.cursorStyle, m.currentWord, &m.currentWordStyle)
 		} else {
 			if m.marks.Contains(current.Line) {
-				cegs = m.cegmentize(current.Line, &m.markStyle)
+				cegs = m.cegmentize(current.Line, &m.markStyle, -1, &m.currentWordStyle)
 			} else {
-				cegs = m.cegmentize(current.Line, &m.defaultStyle)
+				cegs = m.cegmentize(current.Line, &m.defaultStyle, -1, &m.currentWordStyle)
 			}
 		}
 
