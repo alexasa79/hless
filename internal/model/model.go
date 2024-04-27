@@ -140,6 +140,8 @@ type Model struct {
 
 	currentWord      int
 	currentWordStyle lipgloss.Style
+
+	hideCommand bool
 }
 
 var ML *hhlog.Logger
@@ -337,10 +339,13 @@ func (m *Model) onKeyUp() {
 			m.top.Segment -= 1
 		} else {
 			if m.top.Line.Offset > 0 {
-				m.top.Line = m.lines.Prev(m.top.Line)
-				segs := m.segmentize(m.top.Line)
-				m.top.Segment = len(segs) - 1
-				m.cursorLine = m.top.Line
+				newTop := m.lines.Prev(m.top.Line)
+				if newTop != nil {
+					m.top.Line = newTop
+					segs := m.segmentize(m.top.Line)
+					m.top.Segment = len(segs) - 1
+					m.cursorLine = m.top.Line
+				}
 			}
 		}
 	}
@@ -403,6 +408,21 @@ func (m *Model) onAddCurrentWord() {
 	} else {
 		m.searches[m.search].pattern += "|" + word
 	}
+}
+
+func (m *Model) hideBeforeCursor() {
+	m.top.Line = m.cursorLine
+	m.top.Segment = 0
+	m.lines.SetFirst(m.top.Line)
+}
+
+func (m *Model) hideAfterCursor() {
+	m.lines.SetLast(m.cursorLine)
+}
+
+func (m *Model) hideReset() {
+	m.lines.SetFirst(nil)
+	m.lines.SetLast(nil)
 }
 
 func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
@@ -920,7 +940,7 @@ func (m *Model) renderStatusBar() string {
 	succ := m.marks.Successor(m.cursorLine)
 
 	ll := ""
-	ll = fmt.Sprintf("Line %s/∞ ", m.cursorLine.Name())
+	ll = fmt.Sprintf("Line %s/∞ @%d ", m.cursorLine.Name(), m.cursorLine.Offset)
 	tt := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
 	if tt != nil {
 		ll += tt.String()
@@ -953,6 +973,10 @@ func (m *Model) renderStatusBar() string {
 		ll += " "
 	}
 
+	if m.hideCommand {
+		ll += " H "
+	}
+
 	st1 := m.statusStyle.Render(ll)
 	st1 += m.markStyle.Render(marks)
 	st1 += m.statusStyle.Render(rest)
@@ -969,8 +993,16 @@ func (m *Model) renderStatusBar() string {
 				continue
 			}
 
+			// var pred *lines.Line = nil
 			pred = m.searchHits[i].Predecessor(m.cursorLine)
+			if pred != nil && !m.lines.Visible(*pred) {
+				pred = nil
+			}
+
 			succ = m.searchHits[i].Successor(m.cursorLine)
+			if succ != nil && !m.lines.Visible(*succ) {
+				succ = nil
+			}
 
 			sh := make([]string, 0)
 			if pred != nil {
@@ -1090,6 +1122,8 @@ func (m *Model) Init() tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	hideCommand := m.hideCommand
+	m.hideCommand = false
 
 	ML.Info("Got request %v %v", reflect.TypeOf(msg), msg)
 
@@ -1231,10 +1265,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.onHalfPageDown()
 				}
 
-				if k == "b" {
-					m.onHalfPageUp()
-				}
-
 				if k == "enter" {
 					m.centerCursor()
 				}
@@ -1350,14 +1380,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "a" {
-					if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
-						m.search = (m.search + 1) % len(m.searches)
+					if hideCommand {
+						m.hideAfterCursor()
+					} else {
+						if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
+							m.search = (m.search + 1) % len(m.searches)
+						}
+						m.onAddCurrentWord()
 					}
-					m.onAddCurrentWord()
+				}
+
+				if k == "b" {
+					if hideCommand {
+						m.hideBeforeCursor()
+					} else {
+						m.onHalfPageUp()
+					}
+				}
+
+				if k == "c" {
+					if hideCommand {
+						m.hideReset()
+					}
 				}
 
 				if k == "A" {
 					m.onAddCurrentWord()
+				}
+
+				if k == "H" {
+					m.hideCommand = true
 				}
 			}
 		}

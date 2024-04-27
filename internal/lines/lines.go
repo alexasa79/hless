@@ -54,6 +54,9 @@ type Lines struct {
 	lines    *avltree.AVLTree[*Line]
 	sections *avltree.AVLTree[*Section]
 
+	forcedFirst *Line
+	forcedLast *Line
+
 	currentSection *Section
 }
 
@@ -223,9 +226,29 @@ func (lines *Lines) First() *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
+	if lines.forcedFirst != nil {
+		return lines.forcedFirst
+	}
+
 	res := lines.first(0)
 	LL.Debug("Asked to return the first line. Returning %v", res)
 	return res
+}
+
+func (lines *Lines) SetFirst(line *Line) {
+	mx.Lock()
+	defer mx.Unlock()
+
+	LL.Debug("Setting the first line to %v", line)
+	lines.forcedFirst = line
+}
+
+func (lines *Lines) SetLast(line *Line) {
+	mx.Lock()
+	defer mx.Unlock()
+
+	LL.Debug("Setting the last line to %v", line)
+	lines.forcedLast = line
 }
 
 func (lines *Lines) last(iteration int) *Line {
@@ -245,6 +268,10 @@ func (lines *Lines) last(iteration int) *Line {
 func (lines *Lines) Last() *Line {
 	mx.Lock()
 	defer mx.Unlock()
+
+	if lines.forcedLast != nil {
+		return lines.forcedLast
+	}
 
 	res := lines.last(0)
 	LL.Debug("Asked to return last line. Returning %v", res)
@@ -313,6 +340,10 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 
 	next = lines.next(line, 0)
 	LL.Trace("Asked for next of %v, Got %v", line, next)
+
+	if lines.forcedLast != nil && next != nil && next.Offset > lines.forcedLast.Offset {
+		return nil
+	}
 	return next
 }
 
@@ -355,6 +386,10 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 
 	prev = lines.prev(line, 0)
 	LL.Trace("Asked for prev of %v, Got %v", line, prev)
+
+	if lines.forcedFirst != nil && prev != nil && prev.Offset < lines.forcedFirst.Offset {
+		return nil
+	}
 	return prev
 }
 
@@ -390,12 +425,28 @@ func (lines *Lines) JumpTo(offset int64, name string) {
 	mx.Lock()
 	defer mx.Unlock()
 
+	if lines.forcedFirst != nil && offset < lines.forcedFirst.Offset {
+		return
+	}
+
+	if lines.forcedLast != nil && offset > lines.forcedLast.Offset {
+		return
+	}
+
 	lines.jumpTo(offset, name)
 }
 
 func (lines *Lines) At(offset int64, name string) *Line {
 	mx.Lock()
 	defer mx.Unlock()
+
+	if lines.forcedFirst != nil && offset < lines.forcedFirst.Offset {
+		return nil
+	}
+
+	if lines.forcedLast != nil && offset > lines.forcedLast.Offset {
+		return nil
+	}
 
 	lines.jumpTo(offset, name)
 
@@ -438,6 +489,18 @@ func (lines *Lines) At(offset int64, name string) *Line {
 		offset, name, *t)
 
 	return *t
+}
+
+func (lines *Lines) Visible(line *Line) bool {
+	if lines.forcedFirst != nil && line.Offset < lines.forcedFirst.Offset {
+		return false
+	}
+
+	if lines.forcedLast != nil && line.Offset > lines.forcedLast.Offset {
+		return false
+	}
+
+	return true
 }
 
 func (lines *Lines) Text(line *Line) string {

@@ -57,7 +57,8 @@ shortcut.
 
 | Shortcut | Description |
 | --- | --- |
-| a | Hide everything above the current line. |
-| b | Hide everything below the current line. |
+| a | Hide everything after the current line. |
+| b | Hide everything before the current line. |
+| c | Unhide everything. |
 
 `
