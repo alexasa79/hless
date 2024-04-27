@@ -95,6 +95,7 @@ type Model struct {
 	marks *avltree.AVLTree[*lines.Line]
 
 	top        Position
+	prevCursorLine *lines.Line
 	cursorLine *lines.Line
 
 	width  int
@@ -329,7 +330,6 @@ func (m *Model) scrollOneSegmentDown() {
 }
 
 func (m *Model) onKeyUp() {
-	m.currentWord = -1
 	if m.cursorLine != m.top.Line {
 		m.cursorLine = m.lines.Prev(m.cursorLine)
 	} else {
@@ -347,7 +347,6 @@ func (m *Model) onKeyUp() {
 }
 
 func (m *Model) onKeyDown() {
-	m.currentWord = -1
 	if m.lines.Next(m.cursorLine) != nil {
 		bottomLine, bottomSegment := m.bottomLine()
 		ML.Info("Scrolling down. Top line is %v, cursor %v, bottom %v(%d)",
@@ -1350,6 +1349,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.onKeyRight()
 				}
 
+				if k == "a" {
+					if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
+						m.search = (m.search + 1) % len(m.searches)
+					}
+					m.onAddCurrentWord()
+				}
+
 				if k == "A" {
 					m.onAddCurrentWord()
 				}
@@ -1397,6 +1403,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.normalizeView()
+
+	if m.prevCursorLine != m.cursorLine {
+		m.prevCursorLine = m.cursorLine
+		m.currentWord = -1
+	}
 
 	ML.Debug("Returning commands %v", cmds)
 
