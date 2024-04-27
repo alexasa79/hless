@@ -47,6 +47,11 @@ func main() {
 
 	for i := 0; i < cfg.Lines; i++ {
 		n := rand.Intn(len(s))
-		L.Info("L:%-10d %s", i, s[:n])
+
+		n1 := rand.Intn(100)
+		n2 := rand.Intn(1000)
+		n3 := rand.Intn(10000)
+		n4 := rand.Intn(100000)
+		L.Info("L:%-10d %s %d %d %d %d", i, s[:n], n1, n2, n3, n4)
 	}
 }
