@@ -1479,7 +1479,7 @@ func (m *Model) View() string {
 	current := m.top
 	desc := ""
 
-	VL.Info("Rendering the view from line %v, cursor %v, dimensions %dx%d",
+	VL.Debug("Rendering the view from line %v, cursor %v, dimensions %dx%d",
 		current, m.cursorLine, w, h)
 
 	for i := 0; i < len(m.searches); i++ {
@@ -1545,7 +1545,7 @@ func (m *Model) View() string {
 		res += m.renderStatusBar()
 	}
 
-	VL.Info("Rendered: %s, %d lines", strings.Trim(desc, " "), renderedLines)
+	VL.Debug("Rendered: %s, %d lines", strings.Trim(desc, " "), renderedLines)
 
 	return res
 }
