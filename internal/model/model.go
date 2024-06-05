@@ -94,9 +94,9 @@ type Model struct {
 
 	marks *avltree.AVLTree[*lines.Line]
 
-	top        Position
+	top            Position
 	prevCursorLine *lines.Line
-	cursorLine *lines.Line
+	cursorLine     *lines.Line
 
 	width  int
 	height int
@@ -105,6 +105,8 @@ type Model struct {
 	cursorStyle  lipgloss.Style
 	errorStyle   lipgloss.Style
 	statusStyle  lipgloss.Style
+	promptStyle  lipgloss.Style
+	editorStyle  lipgloss.Style
 	markStyle    lipgloss.Style
 
 	searchStyles [9]lipgloss.Style
@@ -142,6 +144,12 @@ type Model struct {
 	currentWordStyle lipgloss.Style
 
 	hideCommand bool
+
+	activeShowTextbox bool
+	showPattern       string
+
+	activeHideTextbox bool
+	hidePattern       string
 }
 
 var ML *hhlog.Logger
@@ -210,6 +218,14 @@ func InitialModel(b *lines.Buffer) *Model {
 			Background(lipgloss.Color("#ff0000")).
 			Foreground(lipgloss.Color("#ffffff")),
 		statusStyle: lipgloss.
+			NewStyle().
+			Background(lipgloss.Color("#eeeeee")).
+			Foreground(lipgloss.Color("#000000")),
+		editorStyle: lipgloss.
+			NewStyle().
+			Background(lipgloss.Color("#aaaaaa")).
+			Foreground(lipgloss.Color("#000000")),
+		promptStyle: lipgloss.
 			NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
 			Foreground(lipgloss.Color("#000000")),
@@ -830,6 +846,25 @@ func (m *Model) centerCursor() {
 	m.normalizeView()
 }
 
+func (m *Model) fixCursor() {
+	pred := m.cursorLine
+	succ := m.lines.Next(m.cursorLine)
+	for pred != nil && succ != nil {
+		if m.lines.Visible(pred) {
+			m.cursorLine = pred
+			break
+		}
+
+		if m.lines.Visible(succ) {
+			m.cursorLine = succ
+			break
+		}
+
+		pred = m.lines.Prev(pred)
+		succ = m.lines.Next(succ)
+	}
+}
+
 func (m *Model) nextMark() {
 	succ := m.marks.Successor(m.cursorLine)
 	if succ != nil {
@@ -1058,6 +1093,32 @@ func (m *Model) renderProgress() string {
 	return res
 }
 
+func (m *Model) renderShowBar() string {
+	res := m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, " "))
+
+	prompt := "Show (regex): "
+	m.textbox.Width = m.width
+	m.textbox.Prompt = prompt
+	m.textbox.PromptStyle = m.promptStyle
+	m.textbox.TextStyle = m.editorStyle
+	res += "\n" + m.textbox.View()
+
+	return res
+}
+
+func (m *Model) renderHideBar() string {
+	res := m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, " "))
+
+	prompt := "Hide (regex): "
+	m.textbox.Width = m.width
+	m.textbox.Prompt = prompt
+	m.textbox.PromptStyle = m.promptStyle
+	m.textbox.TextStyle = m.editorStyle
+	res += "\n" + m.textbox.View()
+
+	return res
+}
+
 func (m *Model) renderSearchBar() string {
 	res := ""
 
@@ -1090,8 +1151,8 @@ func (m *Model) renderGotoBar() string {
 
 	m.textbox.Width = m.width
 	m.textbox.Prompt = ": "
-	m.textbox.PromptStyle = m.searchStyles[m.search]
-	m.textbox.TextStyle = m.searchStyles[m.search]
+	m.textbox.PromptStyle = m.promptStyle
+	m.textbox.TextStyle = m.editorStyle
 
 	res += "\n" + m.textbox.View()
 
@@ -1147,7 +1208,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.helpViewport, cmd = m.helpViewport.Update(msg)
 			cmds = append(cmds, cmd)
 		} else {
-			if m.activeGotoTextbox {
+			if m.activeShowTextbox {
+				if k == "esc" || k == "ctrl+c" {
+					m.activeShowTextbox = false
+					m.textbox.SetValue("")
+					m.textbox.Blur()
+				} else if k == "enter" {
+					m.activeShowTextbox = false
+					m.textbox.Blur()
+					m.showPattern = m.textbox.Value()
+					m.lines.SetShowPattern(m.showPattern)
+					m.fixCursor()
+				} else {
+					m.textbox, cmd = m.textbox.Update(msg)
+					cmds = append(cmds, cmd)
+				}
+			} else if m.activeHideTextbox {
+				if k == "esc" || k == "ctrl+c" {
+					m.activeHideTextbox = false
+					m.textbox.SetValue("")
+					m.textbox.Blur()
+				} else if k == "enter" {
+					m.activeHideTextbox = false
+					m.textbox.Blur()
+					m.hidePattern = m.textbox.Value()
+					m.lines.SetHidePattern(m.hidePattern)
+					m.fixCursor()
+				} else {
+					m.textbox, cmd = m.textbox.Update(msg)
+					cmds = append(cmds, cmd)
+				}
+			} else if m.activeGotoTextbox {
 				if k == "esc" || k == "ctrl+c" {
 					m.textbox.SetValue("")
 					m.activeGotoTextbox = false
@@ -1163,7 +1254,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						cmd = m.jumpTo(j)
 						cmds = append(cmds, cmd)
 					}
-
 				} else {
 					m.textbox, cmd = m.textbox.Update(msg)
 					cmds = append(cmds, cmd)
@@ -1350,7 +1440,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, cmd)
 				}
 
-				if k == "h" {
+				if k == "h" && !hideCommand {
 					ML.Info("Setting help viewport's text to: %s", help.Text)
 					t, _ := m.helpMarkdownRenderer.Render(help.Text)
 					m.helpViewport.SetContent(t)
@@ -1406,6 +1496,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if k == "A" {
 					m.onAddCurrentWord()
+				}
+
+				if k == "s" && hideCommand {
+					m.activeShowTextbox = true
+					m.textbox.Prompt = "regex"
+					m.textbox.SetValue(m.showPattern)
+					m.textbox.SetCursor(len(m.showPattern))
+					cmds = append(cmds, m.textbox.Focus())
+					cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
+				}
+
+				if k == "h" && hideCommand {
+					m.activeHideTextbox = true
+					m.textbox.Prompt = "regex"
+					m.textbox.SetValue(m.hidePattern)
+					m.textbox.SetCursor(len(m.hidePattern))
+					cmds = append(cmds, m.textbox.Focus())
+					cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
 				}
 
 				if k == "H" {
@@ -1535,7 +1643,11 @@ func (m *Model) View() string {
 		renderedLines++
 	}
 
-	if m.activeSearchTextbox {
+	if m.activeShowTextbox {
+		res += m.renderShowBar()
+	} else if m.activeHideTextbox {
+		res += m.renderHideBar()
+	} else if m.activeSearchTextbox {
 		res += m.renderSearchBar()
 	} else if m.activeGotoTextbox {
 		res += m.renderGotoBar()

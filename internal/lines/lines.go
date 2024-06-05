@@ -3,6 +3,7 @@ package lines
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"sync"
 
 	"github.com/alexasa79/hless/internal/avltree"
@@ -58,6 +59,9 @@ type Lines struct {
 	forcedLast *Line
 
 	currentSection *Section
+
+	showPattern *regexp.Regexp
+	hidePattern *regexp.Regexp
 }
 
 func LineComp(a, b *Line) int {
@@ -89,6 +93,9 @@ func NewLines(data *Buffer) *Lines {
 		sections: avltree.NewAVLTree[*Section](SectionComp),
 
 		currentSection: newSection(0, ""),
+
+		showPattern: nil,
+		hidePattern: nil,
 	}
 
 	lines.sections.Insert(lines.currentSection)
@@ -339,7 +346,15 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 	defer mx.Unlock()
 
 	next = lines.next(line, 0)
-	LL.Trace("Asked for next of %v, Got %v", line, next)
+	for next != nil {
+		LL.Trace("Asked for next of %v, Checking %v", line, next)
+		if lines.visible(next) {
+			LL.Trace("Looks good")
+			break
+		} else {
+			next = lines.next(next, 0)
+		}
+	}
 
 	if lines.forcedLast != nil && next != nil && next.Offset > lines.forcedLast.Offset {
 		return nil
@@ -385,7 +400,15 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 	defer mx.Unlock()
 
 	prev = lines.prev(line, 0)
-	LL.Trace("Asked for prev of %v, Got %v", line, prev)
+	for prev != nil {
+		LL.Trace("Asked for prev of %v, Checking %v", line, prev)
+		if lines.visible(prev) {
+			LL.Trace("Looks good")
+			break
+		} else {
+			prev = lines.prev(prev, 0)
+		}
+	}
 
 	if lines.forcedFirst != nil && prev != nil && prev.Offset < lines.forcedFirst.Offset {
 		return nil
@@ -491,7 +514,7 @@ func (lines *Lines) At(offset int64, name string) *Line {
 	return *t
 }
 
-func (lines *Lines) Visible(line *Line) bool {
+func (lines *Lines) visible(line *Line) bool {
 	if lines.forcedFirst != nil && line.Offset < lines.forcedFirst.Offset {
 		return false
 	}
@@ -500,14 +523,56 @@ func (lines *Lines) Visible(line *Line) bool {
 		return false
 	}
 
-	return true
+	show := true
+	if lines.showPattern != nil && !lines.showPattern.MatchString(lines.text(line)) {
+		show = false
+	}
+
+	if lines.hidePattern != nil && lines.hidePattern.MatchString(lines.text(line)) {
+		show = false
+	}
+
+	return show
+}
+
+func (lines *Lines) Visible(line *Line) bool {
+	mx.Lock()
+	defer mx.Unlock()
+
+	return lines.visible(line)
+}
+
+func (lines *Lines) text(line *Line) string {
+	return string(lines.data.Range(line.Offset, line.Offset+line.len))
 }
 
 func (lines *Lines) Text(line *Line) string {
 	mx.Lock()
 	defer mx.Unlock()
 
-	return string(lines.data.Range(line.Offset, line.Offset+line.len))
+	return lines.text(line)
+}
+
+func (lines *Lines) SetShowPattern(pat string) {
+	mx.Lock()
+	defer mx.Unlock()
+
+	if pat != "" {
+		lines.showPattern = regexp.MustCompile(pat)
+	} else {
+		lines.showPattern = nil
+	}
+}
+
+func (lines *Lines) SetHidePattern(pat string) {
+	mx.Lock()
+	defer mx.Unlock()
+
+	if pat != "" {
+		lines.hidePattern = regexp.MustCompile(pat)
+	} else {
+		lines.hidePattern = nil
+	}
 }
 
 func (line *Line) Name() string {
