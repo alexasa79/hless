@@ -1,4 +1,6 @@
 # Hless
+Hless is a terminal pager program (like `less` or `more`) designed to aid at
+analyzing log files.
 
 # High level design
 Every line in the input is broken up into segments. Each segment is
