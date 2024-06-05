@@ -135,7 +135,7 @@ func main() {
 	buffer := lines.NewBufferFromFile(in.Name())
 	defer buffer.Close()
 
-	p := tea.NewProgram(model.InitialModel(buffer), tea.WithAltScreen(), tea.WithFPS(15))
+	p := tea.NewProgram(model.InitialModel(buffer), tea.WithAltScreen())
 	defer tea.ExitAltScreen()
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error rendering the TUI: %v", err)
