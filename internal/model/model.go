@@ -1162,8 +1162,15 @@ func (m *Model) renderGotoBar() string {
 
 func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 	if j.Offset != nil {
+		if *j.Offset < 0 || *j.Offset > 100 {
+			m.setError("Invalid offset")
+			return nil
+		}
+
 		if *j.Offset == 100 {
 			m.cursorLine = m.lines.At(m.buffer.Size(), "end")
+		} else if *j.Offset == 0 {
+			m.cursorLine = m.lines.First()
 		} else {
 			where := float64(m.buffer.Size()) * *j.Offset / 100
 			m.cursorLine = m.lines.At(int64(where), fmt.Sprintf("%f%%", *j.Offset))
