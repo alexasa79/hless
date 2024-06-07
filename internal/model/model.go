@@ -864,6 +864,8 @@ func (m *Model) fixCursor() {
 		pred = m.lines.Prev(pred)
 		succ = m.lines.Next(succ)
 	}
+
+	m.centerCursor()
 }
 
 func (m *Model) nextMark() {
@@ -1010,7 +1012,7 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	if m.hideCommand {
-		ll += " H "
+		ll += " HIDE "
 	}
 
 	st1 := m.statusStyle.Render(ll)
@@ -1500,10 +1502,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
-				if k == "c" {
-					if hideCommand {
-						m.hideReset()
-					}
+				if k == "c" && hideCommand {
+					m.hideReset()
+					m.lines.SetShowPattern("")
+					m.lines.SetHidePattern("")
 				}
 
 				if k == "A" {
