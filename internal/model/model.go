@@ -224,12 +224,12 @@ func InitialModel(b *lines.Buffer) *Model {
 			Foreground(lipgloss.Color("#000000")),
 		editorStyle: lipgloss.
 			NewStyle().
-			Background(lipgloss.Color("#aaaaaa")).
-			Foreground(lipgloss.Color("#000000")),
+			Background(lipgloss.Color("#000000")).
+			Foreground(lipgloss.Color("#ffffff")),
 		promptStyle: lipgloss.
 			NewStyle().
-			Background(lipgloss.Color("#eeeeee")).
-			Foreground(lipgloss.Color("#000000")),
+			Background(lipgloss.Color("#000000")).
+			Foreground(lipgloss.Color("#ffffff")),
 		markStyle: lipgloss.
 			NewStyle().
 			Background(lipgloss.Color("#00a0e4")),
