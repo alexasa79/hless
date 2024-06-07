@@ -42,8 +42,8 @@ pattern match is shown with a different color.
 | 1-9 | Search down for the respective search pattern. |
 | 1-9 + Shift| Search for the respetive search pattern. |
 | e | Edit the current search pattern. |
-| F2 | Switch to the previous search pattern. |
-| F4 | Switch to the next search pattern. |
+| F2 or [ | Switch to the previous search pattern. |
+| F4 or ] | Switch to the next search pattern. |
 | Left | Select the previous word on the current line. |
 | Right | Select the next word on the current line. |
 | a | Start new search pattern with the selected word. Will NOT search for the next match. |

@@ -1382,7 +1382,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeSearchDirection = SEARCH_NOWHERE
 				}
 
-				if k == "f2" {
+				if k == "f2" || k == "[" {
 					if m.search > 0 {
 						m.search--
 						m.newSearch = m.searches[m.search]
@@ -1391,7 +1391,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
-				if k == "f4" {
+				if k == "f4" || k == "]" {
 					if m.search < len(m.searches)-1 {
 						m.search++
 						m.newSearch = m.searches[m.search]
