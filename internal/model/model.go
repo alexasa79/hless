@@ -120,6 +120,7 @@ type Model struct {
 	searchHits   [9]*avltree.AVLTree[*lines.Line]
 	searchRanges [9]*avltree.AVLTree[SearchRange]
 	search       int
+	prevSearch   int
 
 	activeGotoTextbox bool
 	gotoLine          int64
@@ -1280,6 +1281,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if k == "tab" {
 					m.newSearch.regex = !m.newSearch.regex
 				} else if k == "esc" || k == "ctrl+c" {
+					m.search = m.prevSearch
 					m.textbox.SetValue(m.searches[m.search].pattern)
 					m.activeSearchTextbox = false
 					m.textbox.Blur()
@@ -1372,6 +1374,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "e" {
+					m.prevSearch = m.search
+
 					m.newSearch = m.searches[m.search]
 					m.textbox.SetValue(m.newSearch.pattern)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
@@ -1401,6 +1405,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if k == "/" || k == "?" {
 					if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
+						m.prevSearch = m.search
 						m.search = (m.search + 1) % len(m.searches)
 					}
 
