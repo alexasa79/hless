@@ -78,18 +78,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	if len(cfg.InputFiles) != 1 {
-		fmt.Fprintln(os.Stderr, "Expected single input file")
-		os.Exit(1)
-	}
-
-	in, err := os.Open(cfg.InputFiles[0])
-	if err != nil {
-		fmt.Println("Error opening input file:", err)
-		os.Exit(1)
-	}
-	defer in.Close()
-
 	if cfg.Debug != "" || cfg.Trace != "" {
 		hhlog.SetupLogging("hless.log")
 		ML = hhlog.NewLogger("MODEL")
@@ -132,10 +120,23 @@ func main() {
 		model.VL = VL
 	}
 
-	buffer := lines.NewBufferFromFile(in.Name())
-	defer buffer.Close()
+	var buffer *lines.Buffer
 
-	p := tea.NewProgram(model.InitialModel(buffer), tea.WithAltScreen())
+	if len(cfg.InputFiles) != 1 {
+		buffer = lines.NewBufferFromStdin()
+	} else {
+		in, err := os.Open(cfg.InputFiles[0])
+		if err != nil {
+			fmt.Println("Error opening input file:", err)
+			os.Exit(1)
+		}
+		defer in.Close()
+
+		buffer = lines.NewBufferFromFile(in.Name())
+		defer buffer.Close()
+	}
+
+	p := tea.NewProgram(model.InitialModel(buffer), tea.WithAltScreen(), tea.WithInputTTY())
 	defer tea.ExitAltScreen()
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error rendering the TUI: %v", err)

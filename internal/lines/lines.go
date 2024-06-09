@@ -219,6 +219,10 @@ func (lines *Lines) readBackward() {
 func (lines *Lines) first(iteration int) *Line {
 	utils.Assert(iteration < 100)
 
+	if lines.data.fileSize == 0 {
+		return nil
+	}
+
 	lines.jumpTo(0, "")
 	t := lines.lines.Get(&Line{Offset: 0})
 	if t != nil {
@@ -262,8 +266,12 @@ func (lines *Lines) last(iteration int) *Line {
 	utils.Assert(iteration < 100)
 
 	size := lines.data.Size()
+	LL.Trace("Jumping to offset %d", size)
 	lines.jumpTo(size, "end")
 	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
+	if t != nil {
+		LL.Trace("Found last line in current section %v", *t)
+	}
 	if t != nil && (*t).Offset+(*t).rawLength >= size {
 		return *t
 	} else {
@@ -280,6 +288,7 @@ func (lines *Lines) Last() *Line {
 		return lines.forcedLast
 	}
 
+	LL.Trace("Asked to return last line.")
 	res := lines.last(0)
 	LL.Debug("Asked to return last line. Returning %v", res)
 	return res
@@ -345,13 +354,15 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 	mx.Lock()
 	defer mx.Unlock()
 
+	LL.Trace("Asked for next of %v", line)
+
 	next = lines.next(line, 0)
 	for next != nil {
-		LL.Trace("Asked for next of %v, Checking %v", line, next)
 		if lines.visible(next) {
-			LL.Trace("Looks good")
+			LL.Trace("Next of %v is visible %v", line, next)
 			break
 		} else {
+			LL.Trace("Immediate next of %v is invisible %v. Checking next", line, next)
 			next = lines.next(next, 0)
 		}
 	}
@@ -399,13 +410,15 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 	mx.Lock()
 	defer mx.Unlock()
 
+	LL.Trace("Asked for prev of %v", line)
+
 	prev = lines.prev(line, 0)
 	for prev != nil {
-		LL.Trace("Asked for prev of %v, Checking %v", line, prev)
 		if lines.visible(prev) {
-			LL.Trace("Looks good")
+			LL.Trace("Prev of %v is visible %v", line, prev)
 			break
 		} else {
+			LL.Trace("Immediate prev of %v is invisible %v. Checking prev", line, prev)
 			prev = lines.prev(prev, 0)
 		}
 	}
@@ -421,6 +434,8 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 	t := lines.sections.Get(&s)
 	if t != nil {
 		lines.currentSection = *t
+		LL.Trace("Set current section to %v when asked to jump to %s",
+			lines.currentSection, name)
 		return
 	}
 
@@ -429,9 +444,13 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 		pred := *t
 		if offset >= pred.read.start && offset < pred.read.end {
 			lines.currentSection = pred
+			LL.Trace("Set current section to %v when asked to jump to %s",
+			lines.currentSection, name)
 			return
 		} else if offset == pred.read.end {
 			lines.currentSection = pred
+			LL.Trace("Set current section to %v when asked to jump to %s",
+			lines.currentSection, name)
 			return
 		}
 	}
