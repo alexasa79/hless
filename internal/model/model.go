@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -138,7 +137,6 @@ type Model struct {
 	History History
 
 	helpActive           bool
-	helpMarkdownRenderer *glamour.TermRenderer
 	helpViewport         viewport.Model
 
 	currentWord      int
@@ -1456,8 +1454,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if k == "h" && !hideCommand {
 					ML.Info("Setting help viewport's text to: %s", help.Text)
-					t, _ := m.helpMarkdownRenderer.Render(help.Text)
-					m.helpViewport.SetContent(t)
+					m.helpViewport.SetContent(help.Text)
 					m.helpActive = true
 				}
 
@@ -1553,8 +1550,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.helpViewport.Width = msg.Width
 		m.helpViewport.Height = msg.Height
-		m.helpMarkdownRenderer, _ = glamour.NewTermRenderer(
-			glamour.WithStandardStyle("dark"), glamour.WithWordWrap(msg.Width))
 
 	case ProgressReport:
 		if !msg.interrupted {
