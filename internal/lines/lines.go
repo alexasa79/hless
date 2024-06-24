@@ -485,10 +485,7 @@ func (lines *Lines) JumpTo(offset int64, name string) {
 	lines.jumpTo(offset, name)
 }
 
-func (lines *Lines) At(offset int64, name string) *Line {
-	mx.Lock()
-	defer mx.Unlock()
-
+func (lines *Lines) at(offset int64, name string) *Line {
 	if lines.forcedFirst != nil && offset < lines.forcedFirst.Offset {
 		return nil
 	}
@@ -538,6 +535,29 @@ func (lines *Lines) At(offset int64, name string) *Line {
 		offset, name, *t)
 
 	return *t
+}
+
+func (lines *Lines) At(offset int64, name string) *Line {
+	mx.Lock()
+	defer mx.Unlock()
+
+	line := lines.at(offset, name)
+	prev := line
+	next := line
+	for line != nil {
+		if lines.visible(prev) {
+			return prev
+		} else {
+			prev = lines.prev(prev, 0)
+		}
+
+		if lines.visible(next) {
+			return next
+		} else {
+			next = lines.next(next, 0)
+		}
+	}
+	return line
 }
 
 func (lines *Lines) visible(line *Line) bool {
