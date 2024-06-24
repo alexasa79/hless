@@ -242,6 +242,10 @@ func (lines *Lines) First() *Line {
 	}
 
 	res := lines.first(0)
+	for res != nil && !lines.visible(res) {
+		res = lines.next(res, 0)
+	}
+
 	LL.Debug("Asked to return the first line. Returning %v", res)
 	return res
 }
@@ -290,6 +294,9 @@ func (lines *Lines) Last() *Line {
 
 	LL.Trace("Asked to return last line.")
 	res := lines.last(0)
+	for res != nil && !lines.visible(res) {
+		res = lines.prev(res, 0)
+	}
 	LL.Debug("Asked to return last line. Returning %v", res)
 	return res
 }

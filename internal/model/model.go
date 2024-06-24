@@ -802,9 +802,9 @@ func (m *Model) gotoWithProgress() tea.Cmd {
 	}
 }
 
-// / Given current position of the cursor, make sure it is visible.
-// / This is needed in cases when change of terminal's size causes the cursor
-// / to become invisible (usually by being below bottom line).
+// Given current position of the cursor, make sure it is visible.
+// This is needed in cases when change of terminal's size causes the cursor
+// to become invisible (usually by being below bottom line).
 func (m *Model) normalizeView() {
 	if !m.ready {
 		return
