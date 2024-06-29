@@ -50,7 +50,6 @@ type Line struct {
 
 type Lines struct {
 	data *Buffer
-	eof  bool
 
 	lines    *avltree.AVLTree[*Line]
 	sections *avltree.AVLTree[*Section]
@@ -86,8 +85,6 @@ func newSection(offset int64, name string) *Section {
 func NewLines(data *Buffer) *Lines {
 	lines := &Lines{
 		data: data,
-
-		eof: false,
 
 		lines:    avltree.NewAVLTree[*Line](LineComp),
 		sections: avltree.NewAVLTree[*Section](SectionComp),
@@ -327,15 +324,13 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 	}
 
 	if line.Offset+int64(line.rawLength) >= lines.data.Size() {
+		LL.Trace("Line is past end of file %d >= %d",
+			line.Offset+int64(line.rawLength), lines.data.Size())
 		return nil
 	}
 
 	var next *Line = nil
 	t := lines.lines.Successor(line)
-	if t == nil && lines.eof {
-		return nil
-	}
-
 	if t != nil {
 		next = *t
 	}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/alexasa79/hless/internal/utils"
 	"golang.org/x/exp/mmap"
 )
 
@@ -16,13 +17,13 @@ const (
 )
 
 type Buffer struct {
+	bufferType bufferType
+
 	filename string
 	fileSize int64
 	m        *mmap.ReaderAt
-
-	bufferType bufferType
-	bytes      []byte
-	streamFd   int
+	bytes    []byte
+	streamFd int
 }
 
 func NewBufferFromFile(filename string) *Buffer {
@@ -87,11 +88,11 @@ func NewBufferFromStdin() *Buffer {
 
 	LL.Debug("Read %d bytes from the stream", len(b))
 
-	return &Buffer {
-		fileSize: int64(len(b)),
+	return &Buffer{
+		fileSize:   int64(len(b)),
 		bufferType: bufferTypeStream,
-		bytes: b,
-		streamFd: nfd,
+		bytes:      b,
+		streamFd:   nfd,
 	}
 }
 
@@ -127,4 +128,29 @@ func (b *Buffer) Range(start, end int64) []byte {
 		return b.bytes[start:end]
 	}
 	panic("unreachable")
+}
+
+func (b *Buffer) Refresh() {
+	switch b.bufferType {
+	case bufferTypeFile:
+		stat, err := os.Stat(b.filename)
+		if err != nil {
+			return
+		}
+		fileSize := stat.Size()
+		if fileSize != b.fileSize {
+			LL.Debug("File's size changed from %d to %d. Remapping", b.fileSize, fileSize)
+			m, err := mmap.Open(b.filename)
+
+			utils.Assert(err == nil, err)
+
+			b.fileSize = fileSize
+			b.m.Close()
+			b.m = m
+		}
+	case bufferTypeString:
+		return
+	case bufferTypeStream:
+		return
+	}
 }

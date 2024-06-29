@@ -1364,6 +1364,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursorLine = m.lines.Last()
 				}
 
+				if k == "R" {
+					m.buffer.Refresh()
+				}
+
 				if k == "pgup" {
 					m.onPageUp()
 				}

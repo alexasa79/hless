@@ -13,6 +13,7 @@ Up or k     - Move the cursor one line up.
 Down or j   - Move the cursor one line down.
 g           - Move the cursor to the beginning of the file.
 G           - Move the cursor to the end of the file.
+R           - Refresh the contents of the file.
 PgUp        - Move the cursor one page up.
 PgDown      - Move the cursor one page down.
 b           - Move the cursor half a page up.
