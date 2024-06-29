@@ -16,6 +16,7 @@ const (
 )
 
 type Buffer struct {
+	filename string
 	fileSize int64
 	m        *mmap.ReaderAt
 
@@ -39,6 +40,7 @@ func NewBufferFromFile(filename string) *Buffer {
 	}
 
 	return &Buffer{
+		filename:   filename,
 		fileSize:   fileSize,
 		m:          m,
 		bufferType: bufferTypeFile,
