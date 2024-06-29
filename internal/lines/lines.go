@@ -363,6 +363,10 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 
 	LL.Trace("Asked for next of %v", line)
 
+	if line == nil {
+		return nil
+	}
+
 	next = lines.next(line, 0)
 	for next != nil {
 		if lines.visible(next) {
@@ -418,6 +422,10 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 	defer mx.Unlock()
 
 	LL.Trace("Asked for prev of %v", line)
+
+	if line == nil {
+		return nil
+	}
 
 	prev = lines.prev(line, 0)
 	for prev != nil {
@@ -596,6 +604,10 @@ func (lines *Lines) Text(line *Line) string {
 	mx.Lock()
 	defer mx.Unlock()
 
+	if line == nil {
+		return ""
+	}
+
 	return lines.text(line)
 }
 
@@ -624,6 +636,10 @@ func (lines *Lines) SetHidePattern(pat string) {
 func (line *Line) Name() string {
 	mx.Lock()
 	defer mx.Unlock()
+
+	if line == nil {
+		return ""
+	}
 
 	s := line.section
 	if s.name == "" {

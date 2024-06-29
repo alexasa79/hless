@@ -350,6 +350,10 @@ func (m *Model) onKeyUp() {
 	if m.cursorLine != m.top.Line {
 		m.cursorLine = m.lines.Prev(m.cursorLine)
 	} else {
+		if m.top.Line == nil {
+			return
+		}
+
 		if m.top.Segment > 0 {
 			m.top.Segment -= 1
 		} else {
@@ -806,7 +810,7 @@ func (m *Model) gotoWithProgress() tea.Cmd {
 // This is needed in cases when change of terminal's size causes the cursor
 // to become invisible (usually by being below bottom line).
 func (m *Model) normalizeView() {
-	if !m.ready {
+	if !m.ready || m.cursorLine == nil {
 		return
 	}
 
@@ -971,6 +975,16 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord in
 }
 
 func (m *Model) renderStatusBar() string {
+	VL.Debug("Rendering status bar with cursor %v", m.cursorLine)
+
+	if (m.cursorLine == nil) {
+		st1 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, "EMPTY BUFFER"))
+		st2 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
+		return st1 + "\n" + st2
+	} else {
+		VL.Trace("Cursor is not nil")
+	}
+
 	cont := m.marks.Contains(m.cursorLine)
 	pred := m.marks.Predecessor(m.cursorLine)
 	succ := m.marks.Successor(m.cursorLine)
@@ -1076,13 +1090,11 @@ func (m *Model) renderStatusBar() string {
 		st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 	}
 
-	return "\n" + st1 + "\n" + st2
+	return st1 + "\n" + st2
 }
 
 func (m *Model) renderProgress() string {
 	res := ""
-
-	res += "\n"
 
 	text := "Press Ctrl+c or Esc to interrupt"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
@@ -1095,7 +1107,7 @@ func (m *Model) renderProgress() string {
 }
 
 func (m *Model) renderShowBar() string {
-	res := m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, " "))
+	res := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, " "))
 
 	prompt := "Show (regex): "
 	m.textbox.Width = m.width
@@ -1108,7 +1120,7 @@ func (m *Model) renderShowBar() string {
 }
 
 func (m *Model) renderHideBar() string {
-	res := m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, " "))
+	res := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, " "))
 
 	prompt := "Hide (regex): "
 	m.textbox.Width = m.width
@@ -1124,7 +1136,7 @@ func (m *Model) renderSearchBar() string {
 	res := ""
 
 	text := "Tab: (regex/plain)  F2/F4: Next/Prev"
-	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
+	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
 	prompt := fmt.Sprintf("%d: ", m.search+1)
 
@@ -1148,7 +1160,7 @@ func (m *Model) renderGotoBar() string {
 	res := ""
 
 	text := ""
-	res += m.statusStyle.Render(fmt.Sprintf("\n%-*s", m.width, text))
+	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
 	m.textbox.Width = m.width
 	m.textbox.Prompt = ": "
@@ -1647,10 +1659,14 @@ func (m *Model) View() string {
 		current.Segment = 0
 	}
 
+	VL.Trace("Rendered %d lines so far", renderedLines)
+
 	for renderedLines < m.height {
-		res += fmt.Sprintf("%-*s\n", w, " ")
+		res += "\n"
 		renderedLines++
 	}
+
+	res += "\n"
 
 	if m.activeShowTextbox {
 		res += m.renderShowBar()
@@ -1666,7 +1682,8 @@ func (m *Model) View() string {
 		res += m.renderStatusBar()
 	}
 
-	VL.Debug("Rendered: %s, %d lines", strings.Trim(desc, " "), renderedLines)
+	VL.Debug("Rendered: %s, %d lines of text", strings.Trim(desc, " "), renderedLines)
+	VL.Debug("Total rendered %d characters and %d lines", len(res), utils.CountLines(res))
 
 	return res
 }

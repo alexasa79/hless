@@ -106,3 +106,7 @@ func NthWord(s string, n int) (int, int, error) {
 		return wordStarts[n], wordStarts[n] + len(fields[n]), nil
 	}
 }
+
+func CountLines(s string) int {
+	return strings.Count(s, "\n")
+}
