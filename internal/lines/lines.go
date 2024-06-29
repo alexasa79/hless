@@ -268,7 +268,7 @@ func (lines *Lines) last(iteration int) *Line {
 
 	size := lines.data.Size()
 	LL.Trace("Jumping to offset %d", size)
-	lines.jumpTo(size, "end")
+	lines.jumpTo(size, fmt.Sprintf("@%d", size))
 	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
 	if t != nil {
 		LL.Trace("Found last line in current section %v", *t)
@@ -488,7 +488,7 @@ func (lines *Lines) JumpTo(offset int64, name string) {
 	lines.jumpTo(offset, name)
 }
 
-func (lines *Lines) at(offset int64, name string) *Line {
+func (lines *Lines) at(offset int64) *Line {
 	if lines.forcedFirst != nil && offset < lines.forcedFirst.Offset {
 		return nil
 	}
@@ -497,6 +497,7 @@ func (lines *Lines) at(offset int64, name string) *Line {
 		return nil
 	}
 
+	name := fmt.Sprintf("@%d", offset)
 	lines.jumpTo(offset, name)
 
 	s := lines.currentSection
@@ -540,11 +541,11 @@ func (lines *Lines) at(offset int64, name string) *Line {
 	return *t
 }
 
-func (lines *Lines) At(offset int64, name string) *Line {
+func (lines *Lines) At(offset int64) *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	line := lines.at(offset, name)
+	line := lines.at(offset)
 	prev := line
 	next := line
 	for line != nil {

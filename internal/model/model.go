@@ -990,7 +990,7 @@ func (m *Model) renderStatusBar() string {
 	succ := m.marks.Successor(m.cursorLine)
 
 	ll := ""
-	ll = fmt.Sprintf("Line %s/∞ @%d ", m.cursorLine.Name(), m.cursorLine.Offset)
+	ll = fmt.Sprintf("Line %s @%d ", m.cursorLine.Name(), m.cursorLine.Offset)
 	tt := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
 	if tt != nil {
 		ll += tt.String()
@@ -1180,12 +1180,12 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 		}
 
 		if *j.Offset == 100 {
-			m.cursorLine = m.lines.At(m.buffer.Size(), "end")
+			m.cursorLine = m.lines.Last()
 		} else if *j.Offset == 0 {
 			m.cursorLine = m.lines.First()
 		} else {
 			where := float64(m.buffer.Size()) * *j.Offset / 100
-			m.cursorLine = m.lines.At(int64(where), fmt.Sprintf("%f%%", *j.Offset))
+			m.cursorLine = m.lines.At(int64(where))
 		}
 	}
 
