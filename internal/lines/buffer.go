@@ -151,6 +151,8 @@ func (b *Buffer) Refresh() {
 	case bufferTypeString:
 		return
 	case bufferTypeStream:
-		return
+		buf := readSome(b.streamFd)
+		b.bytes = append(b.bytes, buf...)
+		b.fileSize = int64(len(b.bytes))
 	}
 }
