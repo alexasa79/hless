@@ -7,6 +7,7 @@ hless-amd64:
 
 clean:
 	go clean
+	rm -f hh
 
 test:
 	go test ./...
