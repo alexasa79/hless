@@ -30,10 +30,10 @@ Options:
   -h, --help
   -V, --version         Show the version and exit.
       --debug [MODS]    Enable debug logging for specified comma separated
-	                    list of modules.
+                        list of modules.
       --trace [MODS]    Enable trace logging for specified comma separated
-	                    list of modules. Implies --debug.
-	  --profile         Enable CPU profiling.
+                        list of modules. Implies --debug.
+      --profile         Enable CPU profiling.
 
   Supported modules with --debug and --trace:
     all, view, model, search, lines

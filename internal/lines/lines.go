@@ -521,6 +521,8 @@ func (lines *Lines) at(offset int64) *Line {
 		pos--
 	}
 
+	LL.Trace("Found new line starting from position %d", pos)
+
 	// Making sure that next line we add in readForward will get index 0. Forward index
 	// is set to 1 by default to accomodate the first section. This does not work for
 	// sections we add in the middle of the file.
@@ -530,10 +532,8 @@ func (lines *Lines) at(offset int64) *Line {
 	s.read = Range{pos, pos}
 	lines.readForward()
 
-	t = lines.lines.Predecessor(&Line{Offset: offset})
+	t = lines.lines.Get(&Line{Offset: pos})
 	utils.Assert(t != nil, offset, name)
-
-	LL.Debug("Section after reading %v", s)
 
 	LL.Debug("Asked for line at offset of %d, with section name %s. Returning %+v",
 		offset, name, *t)
@@ -544,6 +544,8 @@ func (lines *Lines) at(offset int64) *Line {
 func (lines *Lines) At(offset int64) *Line {
 	mx.Lock()
 	defer mx.Unlock()
+
+	LL.Debug("Asked to return the line at offset %d", offset)
 
 	line := lines.at(offset)
 	prev := line
@@ -561,6 +563,8 @@ func (lines *Lines) At(offset int64) *Line {
 			next = lines.next(next, 0)
 		}
 	}
+
+	LL.Debug("Returning %v", line)
 	return line
 }
 

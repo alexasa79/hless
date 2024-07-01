@@ -788,6 +788,7 @@ func (m *Model) gotoWithProgress() tea.Cmd {
 		if counter == m.gotoLine {
 			interrupted = true
 			m.cursorLine = currentLine
+			m.centerCursor()
 		} else if currentLine == nil {
 			m.setError("Line not found")
 			interrupted = true
@@ -1187,6 +1188,8 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 			where := float64(m.buffer.Size()) * *j.Offset / 100
 			m.cursorLine = m.lines.At(int64(where))
 		}
+
+		m.centerCursor()
 	}
 
 	if j.Lines != nil {
