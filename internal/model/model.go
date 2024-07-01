@@ -48,14 +48,6 @@ type SearchRange struct {
 	end   int64
 }
 
-type SearchHistory struct {
-	Search []string
-}
-
-type History struct {
-	Searches [9]SearchHistory
-}
-
 type CegmentRange struct {
 	start int
 	end   int
@@ -134,7 +126,7 @@ type Model struct {
 	errorText             string
 	errorTimeoutScheduled bool
 
-	History History
+	History *History
 
 	helpActive           bool
 	helpViewport         viewport.Model
@@ -178,8 +170,6 @@ var searchBackwardRunes = map[string]int{
 	"*": 7,
 	"(": 8,
 }
-
-var chk = utils.Check
 
 func int64Comp(a, b int64) int {
 	if a < b {
@@ -250,7 +240,7 @@ func InitialModel(b *lines.Buffer) *Model {
 
 		textbox: textinput.New(),
 
-		History: History{},
+		History: NewHistory(),
 
 		helpViewport: viewport.New(0, 0),
 
@@ -272,8 +262,6 @@ func InitialModel(b *lines.Buffer) *Model {
 		}
 		m.searchHits[i] = avltree.NewAVLTree(lines.LineComp)
 		m.searchRanges[i] = avltree.NewAVLTree(searchRangeComp)
-
-		m.History.Searches[i].Search = make([]string, 0)
 	}
 
 	return &m
@@ -1201,6 +1189,7 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 }
 
 func (m *Model) Init() tea.Cmd {
+	m.History.Load()
 	return m.helpViewport.Init()
 }
 
@@ -1236,12 +1225,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeShowTextbox = false
 					m.textbox.SetValue("")
 					m.textbox.Blur()
+					m.History.ResetCursor()
 				} else if k == "enter" {
 					m.activeShowTextbox = false
 					m.textbox.Blur()
 					m.showPattern = m.textbox.Value()
+					m.History.Append(m.textbox.Value())
 					m.lines.SetShowPattern(m.showPattern)
 					m.fixCursor()
+				} else if k == "up" {
+					m.textbox.SetValue(m.History.Prev(m.textbox.Value()))
+					m.textbox.CursorEnd()
+				} else if k == "down" {
+					m.textbox.SetValue(m.History.Next(m.textbox.Value()))
+					m.textbox.CursorEnd()
 				} else {
 					m.textbox, cmd = m.textbox.Update(msg)
 					cmds = append(cmds, cmd)
@@ -1251,12 +1248,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeHideTextbox = false
 					m.textbox.SetValue("")
 					m.textbox.Blur()
+					m.History.ResetCursor()
 				} else if k == "enter" {
 					m.activeHideTextbox = false
 					m.textbox.Blur()
 					m.hidePattern = m.textbox.Value()
+					m.History.Append(m.textbox.Value())
 					m.lines.SetHidePattern(m.hidePattern)
 					m.fixCursor()
+				} else if k == "up" {
+					m.textbox.SetValue(m.History.Prev(m.textbox.Value()))
+					m.textbox.CursorEnd()
+				} else if k == "down" {
+					m.textbox.SetValue(m.History.Next(m.textbox.Value()))
+					m.textbox.CursorEnd()
 				} else {
 					m.textbox, cmd = m.textbox.Update(msg)
 					cmds = append(cmds, cmd)
@@ -1266,9 +1271,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textbox.SetValue("")
 					m.activeGotoTextbox = false
 					m.textbox.Blur()
+					m.History.ResetCursor()
 				} else if k == "enter" {
 					m.activeGotoTextbox = false
 					m.textbox.Blur()
+
+					m.History.Append(m.textbox.Value())
 
 					j, err := jumpparser.Parse(m.textbox.Value())
 					if err != nil {
@@ -1277,6 +1285,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						cmd = m.jumpTo(j)
 						cmds = append(cmds, cmd)
 					}
+				} else if k == "up" {
+					m.textbox.SetValue(m.History.Prev(m.textbox.Value()))
+					m.textbox.CursorEnd()
+				} else if k == "down" {
+					m.textbox.SetValue(m.History.Next(m.textbox.Value()))
+					m.textbox.CursorEnd()
 				} else {
 					m.textbox, cmd = m.textbox.Update(msg)
 					cmds = append(cmds, cmd)
@@ -1286,6 +1300,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeSearchTextbox = false
 					m.textbox.Blur()
 					m.newSearch.pattern = m.textbox.Value()
+					m.History.Append(m.textbox.Value())
 					if m.newSearch.pattern != m.searches[m.search].pattern ||
 						m.newSearch.regex != m.searches[m.search].regex {
 						m.searches[m.search] = m.newSearch
@@ -1307,6 +1322,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textbox.SetValue(m.searches[m.search].pattern)
 					m.activeSearchTextbox = false
 					m.textbox.Blur()
+					m.History.ResetCursor()
 				} else if k == "f4" {
 					if m.newSearch.pattern != m.searches[m.search].pattern ||
 						m.newSearch.regex != m.searches[m.search].regex {
@@ -1333,6 +1349,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.textbox.SetValue(m.newSearch.pattern)
 						m.textbox.SetCursor(len(m.newSearch.pattern))
 					}
+				} else if k == "up" {
+					m.textbox.SetValue(m.History.Prev(m.textbox.Value()))
+					m.textbox.CursorEnd()
+				} else if k == "down" {
+					m.textbox.SetValue(m.History.Next(m.textbox.Value()))
+					m.textbox.CursorEnd()
 				} else {
 					m.textbox, cmd = m.textbox.Update(msg)
 					cmds = append(cmds, cmd)
@@ -1343,6 +1365,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						ML.Debug("Interrupting progress")
 						m.progressInterrupt <- true
 					} else {
+						m.History.Save()
 						return m, tea.Quit
 					}
 				}
