@@ -1436,20 +1436,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "f2" || k == "[" {
-					if m.search > 0 {
-						m.search--
-						m.newSearch = m.searches[m.search]
-						m.textbox.SetValue(m.newSearch.pattern)
-						m.textbox.SetCursor(len(m.newSearch.pattern))
-					}
+					m.onPrevSearch()
 				}
 
 				if k == "f4" || k == "]" {
-					if m.search < len(m.searches)-1 {
-						m.search++
-						m.newSearch = m.searches[m.search]
-						m.textbox.SetValue(m.newSearch.pattern)
-					}
+					m.onNextSearch()
 				}
 
 				if k == "/" || k == "?" {
