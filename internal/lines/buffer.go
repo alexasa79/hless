@@ -3,6 +3,7 @@ package lines
 import (
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/alexasa79/hless/internal/utils"
 	"golang.org/x/exp/mmap"
@@ -57,18 +58,16 @@ func NewBufferFromString(s string) *Buffer {
 }
 
 func readSome(fd int) []byte {
-	b := make([]byte, 0)
+	b := make([]byte, 65536)
 
-	for {
-		temp := make([]byte, 8192)
-		n, err := syscall.Read(fd, temp)
-
-		if err == syscall.EAGAIN || n == 0 {
-			break
-		}
-
-		b = append(b, temp[:n]...)
+	n, err := syscall.Read(fd, b)
+	if err != nil {
+		LL.Warning("%s", err)
+	} else {
+		b = b[:n]
 	}
+
+	LL.Trace("Read %d bytes from the stream", len(b))
 
 	return b
 }
@@ -82,16 +81,10 @@ func NewBufferFromStdin() *Buffer {
 
 	os.Stdin.Close()
 
-	syscall.SetNonblock(nfd, true)
-
-	b := readSome(nfd)
-
-	LL.Debug("Read %d bytes from the stream", len(b))
-
 	return &Buffer{
-		fileSize:   int64(len(b)),
+		fileSize:   int64(0),
 		bufferType: bufferTypeStream,
-		bytes:      b,
+		bytes:      make([]byte, 0),
 		streamFd:   nfd,
 	}
 }
@@ -130,12 +123,14 @@ func (b *Buffer) Range(start, end int64) []byte {
 	panic("unreachable")
 }
 
-func (b *Buffer) Refresh() {
+func (b *Buffer) Refresh() bool {
+	LL.Trace("Refreshing buffer")
+
 	switch b.bufferType {
 	case bufferTypeFile:
 		stat, err := os.Stat(b.filename)
 		if err != nil {
-			return
+			return false
 		}
 		fileSize := stat.Size()
 		if fileSize != b.fileSize {
@@ -147,12 +142,23 @@ func (b *Buffer) Refresh() {
 			b.fileSize = fileSize
 			b.m.Close()
 			b.m = m
+			return true
+		} else {
+			time.Sleep(100 * time.Millisecond)
 		}
+		return false
 	case bufferTypeString:
-		return
+		return false
 	case bufferTypeStream:
+		res := false
 		buf := readSome(b.streamFd)
+		if len(buf) > 0 {
+			LL.Debug("Read another %d bytes. Got %d bytes total", len(buf), len(b.bytes)+len(buf))
+			res = true
+		}
 		b.bytes = append(b.bytes, buf...)
 		b.fileSize = int64(len(b.bytes))
+		return res
 	}
+	return false
 }

@@ -59,6 +59,8 @@ type ProgressReport struct {
 	interrupted bool
 }
 
+type BufferRefreshSignal int
+
 func (c CegmentRange) Start() int {
 	return c.start
 }
@@ -82,6 +84,7 @@ type Model struct {
 
 	buffer *lines.Buffer
 	lines  *lines.Lines
+	backgroundReaderStarted bool
 
 	marks *avltree.AVLTree[*lines.Line]
 
@@ -1193,6 +1196,14 @@ func (m *Model) Init() tea.Cmd {
 	return m.helpViewport.Init()
 }
 
+func (m *Model) BufferRefresher() tea.Msg {
+	for {
+		if m.buffer.Refresh() {
+			return BufferRefreshSignal(1)
+		}
+	}
+}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	hideCommand := m.hideCommand
@@ -1201,6 +1212,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	ML.Info("Got request %v %v", reflect.TypeOf(msg), msg)
 
 	cmds := make([]tea.Cmd, 0)
+
+	if !m.backgroundReaderStarted {
+		m.backgroundReaderStarted = true
+		cmds = append(cmds, m.BufferRefresher)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -1592,6 +1608,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.inProgress = false
 			m.progressInterrupt = nil
 		}
+
+	case BufferRefreshSignal:
+		ML.Debug("Buffer changed. New buffer is %d bytes long", m.buffer.Size())
+
+		if m.ready && m.top.Line == nil {
+			m.top.Line = m.lines.First()
+			m.top.Segment = 0
+			m.cursorLine = m.top.Line
+		}
+
+		cmds = append(cmds, m.BufferRefresher)
 	}
 
 	if m.activeError && !m.errorTimeoutScheduled {
