@@ -55,7 +55,7 @@ type Lines struct {
 	sections *avltree.AVLTree[*Section]
 
 	forcedFirst *Line
-	forcedLast *Line
+	forcedLast  *Line
 
 	currentSection *Section
 
@@ -362,6 +362,10 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		return nil
 	}
 
+	if lines.forcedLast != nil && line == lines.forcedLast {
+		return nil
+	}
+
 	next = lines.next(line, 0)
 	for next != nil {
 		if lines.visible(next) {
@@ -373,9 +377,6 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		}
 	}
 
-	if lines.forcedLast != nil && next != nil && next.Offset > lines.forcedLast.Offset {
-		return nil
-	}
 	return next
 }
 
@@ -422,6 +423,10 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		return nil
 	}
 
+	if lines.forcedFirst != nil && line == lines.forcedFirst {
+		return nil
+	}
+
 	prev = lines.prev(line, 0)
 	for prev != nil {
 		if lines.visible(prev) {
@@ -433,13 +438,12 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		}
 	}
 
-	if lines.forcedFirst != nil && prev != nil && prev.Offset < lines.forcedFirst.Offset {
-		return nil
-	}
 	return prev
 }
 
 func (lines *Lines) jumpTo(offset int64, name string) {
+	LL.Trace("Asked to jump to offset %d, name %s", offset, name)
+
 	s := Section{read: Range{start: offset, end: offset}}
 	t := lines.sections.Get(&s)
 	if t != nil {
@@ -455,12 +459,12 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 		if offset >= pred.read.start && offset < pred.read.end {
 			lines.currentSection = pred
 			LL.Trace("Set current section to %v when asked to jump to %s",
-			lines.currentSection, name)
+				lines.currentSection, name)
 			return
 		} else if offset == pred.read.end {
 			lines.currentSection = pred
 			LL.Trace("Set current section to %v when asked to jump to %s",
-			lines.currentSection, name)
+				lines.currentSection, name)
 			return
 		}
 	}
