@@ -215,12 +215,12 @@ func InitialModel(b *lines.Buffer) *Model {
 			Foreground(lipgloss.Color("#000000")),
 		editorStyle: lipgloss.
 			NewStyle().
-			Background(lipgloss.Color("#000000")).
+			Background(lipgloss.Color("#444444")).
 			Foreground(lipgloss.Color("#ffffff")),
 		promptStyle: lipgloss.
 			NewStyle().
-			Background(lipgloss.Color("#000000")).
-			Foreground(lipgloss.Color("#ffffff")),
+			Background(lipgloss.Color("#eeeeee")).
+			Foreground(lipgloss.Color("#000000")),
 		markStyle: lipgloss.
 			NewStyle().
 			Background(lipgloss.Color("#00a0e4")),
@@ -1101,6 +1101,7 @@ func (m *Model) renderProgress() string {
 func (m *Model) renderShowBar() string {
 	res := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, " "))
 
+	prompt := "Show (regex)❱ "
 	m.textbox.Width = m.width
 	m.textbox.Prompt = prompt
 	m.textbox.PromptStyle = m.promptStyle
@@ -1113,7 +1114,7 @@ func (m *Model) renderShowBar() string {
 func (m *Model) renderHideBar() string {
 	res := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, " "))
 
-	prompt := "Hide (regex): "
+	prompt := "Hide (regex)❱ "
 	m.textbox.Width = m.width
 	m.textbox.Prompt = prompt
 	m.textbox.PromptStyle = m.promptStyle
@@ -1132,9 +1133,9 @@ func (m *Model) renderSearchBar() string {
 	prompt := fmt.Sprintf("%d: ", m.search+1)
 
 	if m.newSearch.regex {
-		prompt += "(regex): "
+		prompt += "(regex)❱ "
 	} else {
-		prompt += "(plain): "
+		prompt += "(plain)❱ "
 	}
 
 	m.textbox.Width = m.width
@@ -1154,7 +1155,7 @@ func (m *Model) renderGotoBar() string {
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
 	m.textbox.Width = m.width
-	m.textbox.Prompt = ": "
+	m.textbox.Prompt = "❱ "
 	m.textbox.PromptStyle = m.promptStyle
 	m.textbox.TextStyle = m.editorStyle
 
