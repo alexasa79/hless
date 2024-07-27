@@ -251,7 +251,10 @@ func (lines *Lines) First() *Line {
 	for res != nil && !lines.visible(res) {
 		res = lines.next(res, 0)
 	}
-	lines.view.lines.Insert(res)
+
+	if res != nil {
+		lines.view.lines.Insert(res)
+	}
 
 	LL.Debug("Asked to return the first line. Returning %v", res)
 	return res
@@ -260,6 +263,10 @@ func (lines *Lines) First() *Line {
 func (lines *Lines) SetFirst(line *Line) {
 	mx.Lock()
 	defer mx.Unlock()
+
+	if line == nil {
+		return
+	}
 
 	LL.Debug("Setting the first line to %v", line)
 
@@ -272,6 +279,10 @@ func (lines *Lines) SetFirst(line *Line) {
 func (lines *Lines) SetLast(line *Line) {
 	mx.Lock()
 	defer mx.Unlock()
+
+	if line == nil {
+		return
+	}
 
 	LL.Debug("Setting the last line to %v", line)
 
@@ -312,7 +323,10 @@ func (lines *Lines) Last() *Line {
 	for res != nil && !lines.visible(res) {
 		res = lines.prev(res, 0)
 	}
-	lines.view.lines.Insert(res)
+
+	if res != nil {
+		lines.view.lines.Insert(res)
+	}
 
 	LL.Debug("Asked to return last line. Returning %v", res)
 	return res
@@ -606,7 +620,9 @@ func (lines *Lines) At(offset int64) *Line {
 		}
 	}
 
-	lines.view.lines.Insert(line)
+	if line != nil {
+		lines.view.lines.Insert(line)
+	}
 
 	LL.Debug("Returning %v", line)
 	return line
