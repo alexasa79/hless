@@ -387,7 +387,7 @@ func (m *Model) onKeyDown() {
 
 func (m *Model) onKeyLeft() {
 	line := m.lines.Text(m.cursorLine)
-	words := strings.Fields(line)
+	words := utils.SplitWords(line)
 	m.currentWord -= 1
 	if m.currentWord < 0 {
 		m.currentWord = len(words) - 1
@@ -396,7 +396,7 @@ func (m *Model) onKeyLeft() {
 
 func (m *Model) onKeyRight() {
 	line := m.lines.Text(m.cursorLine)
-	words := strings.Fields(line)
+	words := utils.SplitWords(line)
 	m.currentWord += 1
 	if m.currentWord >= len(words) {
 		m.currentWord = 0
@@ -909,13 +909,13 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord in
 		start += len(seg)
 	}
 
-	var boldWordStart, boldWordEnd int
-	var err error
+	var boldCeg CegmentRange
 	if boldWord != -1 {
-		boldWordStart, boldWordEnd, err = utils.NthWord(line, boldWord)
-		if err == nil {
+		words := utils.SplitWords(line)
+		if boldWord < len(words) {
+			boldCeg = CegmentRange{start: words[boldWord].Start, end: words[boldWord].End, style: boldStyle}
 			r2 := make([]utils.Range, 0)
-			r2 = append(r2, CegmentRange{start: boldWordStart, end: boldWordEnd, style: boldStyle})
+			r2 = append(r2, boldCeg)
 			r0 = utils.RangesProduct(r0, r2)
 		}
 	}
@@ -939,7 +939,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord in
 
 		if boldWord >= 0 {
 			r2 := make([]utils.Range, 0)
-			r2 = append(r2, CegmentRange{start: boldWordStart, end: boldWordEnd, style: boldStyle})
+			r2 = append(r2, boldCeg)
 			r0 = utils.RangesProduct(r0, r2)
 		}
 	}

@@ -58,7 +58,7 @@ func Check(err error) {
 	}
 }
 
-func ExtractTimestamp(input string) (*time.Time) {
+func ExtractTimestamp(input string) *time.Time {
 	regex := `^(\d{4}-\d{2}-\d{2})T(\d{2}[-:]\d{2}[-:]\d{2}\.\d+)?(Z|[+-]\d{2}:?\d{2})?.*`
 	r := regexp.MustCompile(regex)
 
@@ -70,7 +70,7 @@ func ExtractTimestamp(input string) (*time.Time) {
 	ts := matches[1]
 	ts += "T"
 	ts += strings.ReplaceAll(matches[2], "-", ":")
-	ts += strings.Repeat("0", 18 - len(matches[2]))
+	ts += strings.Repeat("0", 18-len(matches[2]))
 	tz := strings.ReplaceAll(matches[3], "Z", "+")
 	if tz != "" && tz != "+" {
 		ts += tz
@@ -86,25 +86,33 @@ func ExtractTimestamp(input string) (*time.Time) {
 	return &res
 }
 
-func NthWord(s string, n int) (int, int, error) {
-	wordStarts := make([]int, 0)
+type Word struct {
+	Word  string
+	Start int
+	End   int
+}
+
+/* Split a given string into words and return their indexes in the original string */
+func SplitWords(s string) []Word {
+	words := make([]Word, 0)
 	prev := true
 	counter := 0
 	fields := strings.FieldsFunc(s, func(r rune) bool {
-		space := unicode.IsSpace(r)
-		if !space && prev {
-			wordStarts = append(wordStarts, counter)
+		delim := unicode.IsSpace(r) || unicode.IsPunct(r)
+		if !delim && prev {
+			words = append(words, Word{
+				Start: counter,
+			})
 		}
-		counter += 1
-		prev = space
-		return space
+		counter++
+		prev = delim
+		return delim
 	})
-	UL.Info("Found words: %+v", wordStarts)
-	if n >= len(wordStarts) {
-		return 0, 0, fmt.Errorf("no word")
-	} else {
-		return wordStarts[n], wordStarts[n] + len(fields[n]), nil
+	for i, f := range fields {
+		words[i].Word = f
+		words[i].End = words[i].Start + len(f)
 	}
+	return words
 }
 
 func CountLines(s string) int {
