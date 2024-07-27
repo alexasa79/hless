@@ -386,6 +386,10 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		return nil
 	}
 
+	if lines.visible(line) {
+		lines.view.lines.Insert(line)
+	}
+
 	nextPtr := lines.view.lines.Successor(line)
 	if nextPtr == nil || (*nextPtr).section != line.section {
 		next = lines.next(line, 0)
@@ -454,6 +458,10 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 
 	if line.Offset < lines.view.start {
 		return nil
+	}
+
+	if lines.visible(line) {
+		lines.view.lines.Insert(line)
 	}
 
 	prevPtr := lines.view.lines.Predecessor(line)
@@ -654,6 +662,8 @@ func (lines *Lines) SetShowPattern(pat string) {
 	}
 
 	lines.view.lines = avltree.NewAVLTree[*Line](LineComp)
+
+	LL.Debug("Set show pattern to %s", pat)
 }
 
 func (lines *Lines) SetHidePattern(pat string) {
@@ -667,6 +677,8 @@ func (lines *Lines) SetHidePattern(pat string) {
 	}
 
 	lines.view.lines = avltree.NewAVLTree[*Line](LineComp)
+
+	LL.Debug("Set hide pattern to %s", pat)
 }
 
 func (line *Line) Name() string {

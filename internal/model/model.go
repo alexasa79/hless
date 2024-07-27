@@ -409,8 +409,12 @@ func (m *Model) onAddCurrentWord() {
 	}
 
 	line := m.lines.Text(m.cursorLine)
-	words := strings.Fields(line)
-	word := words[m.currentWord]
+	words := utils.SplitWords(line)
+	if m.currentWord >= len(words) {
+		m.currentWord = -1
+		return
+	}
+	word := words[m.currentWord].Word
 
 	m.searches[m.search].regex = true
 	if m.searches[m.search].pattern == "" {
@@ -418,6 +422,22 @@ func (m *Model) onAddCurrentWord() {
 	} else {
 		m.searches[m.search].pattern += "|" + word
 	}
+}
+
+func (m *Model) onAddCurrentWordShowPattern() {
+	line := m.lines.Text(m.cursorLine)
+	words := utils.SplitWords(line)
+	if m.currentWord >= len(words) {
+		m.currentWord = -1
+		return
+	}
+	if m.showPattern == "" {
+		m.showPattern = words[m.currentWord].Word
+	} else {
+		m.showPattern = fmt.Sprintf("%s|%s", m.showPattern, words[m.currentWord].Word)
+	}
+	m.lines.SetShowPattern(m.showPattern)
+	m.fixCursor()
 }
 
 func (m *Model) hideBeforeCursor() {
@@ -973,8 +993,6 @@ func (m *Model) renderStatusBar() string {
 		st1 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, "EMPTY BUFFER"))
 		st2 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 		return st1 + "\n" + st2
-	} else {
-		VL.Trace("Cursor is not nil")
 	}
 
 	cont := m.marks.Contains(m.cursorLine)
@@ -1562,7 +1580,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "A" {
-					m.onAddCurrentWord()
+					if viewCommand {
+						m.onAddCurrentWordShowPattern()
+					} else {
+						m.onAddCurrentWord()
+					}
 				}
 
 				if k == "s" && viewCommand {
@@ -1706,7 +1728,11 @@ func (m *Model) View() string {
 			}
 
 			renderedLines++
-			desc = desc + fmt.Sprintf("%d ", current.Line.Offset)
+			if current.Line == m.cursorLine {
+				desc = desc + fmt.Sprintf("*%d ", current.Line.Offset)
+			} else {
+				desc = desc + fmt.Sprintf("%d ", current.Line.Offset)
+			}
 			h -= 1
 		}
 

@@ -59,5 +59,6 @@ b - Hide everything before the current line.
 s - Only show lines matching the specified pattern.
 h - Hide the lines matching the specified pattern.
 c - Unhide everything. Show everything.
+A - Add currently selected word to show pattern.
 
 `
