@@ -137,7 +137,7 @@ type Model struct {
 	currentWord      int
 	currentWordStyle lipgloss.Style
 
-	hideCommand bool
+	viewCommand bool
 
 	activeShowTextbox bool
 	showPattern       string
@@ -1015,8 +1015,8 @@ func (m *Model) renderStatusBar() string {
 		ll += " "
 	}
 
-	if m.hideCommand {
-		ll += " HIDE "
+	if m.viewCommand {
+		ll += " VIEW "
 	}
 
 	st1 := m.statusStyle.Render(ll)
@@ -1101,7 +1101,6 @@ func (m *Model) renderProgress() string {
 func (m *Model) renderShowBar() string {
 	res := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, " "))
 
-	prompt := "Show (regex): "
 	m.textbox.Width = m.width
 	m.textbox.Prompt = prompt
 	m.textbox.PromptStyle = m.promptStyle
@@ -1206,8 +1205,8 @@ func (m *Model) BufferRefresher() tea.Msg {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	hideCommand := m.hideCommand
-	m.hideCommand = false
+	viewCommand := m.viewCommand
+	m.viewCommand = false
 
 	ML.Info("Got request %v %v", reflect.TypeOf(msg), msg)
 
@@ -1501,7 +1500,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, cmd)
 				}
 
-				if k == "h" && !hideCommand {
+				if k == "h" && !viewCommand {
 					ML.Info("Setting help viewport's text to: %s", help.Text)
 					m.helpViewport.SetContent(help.Text)
 					m.helpActive = true
@@ -1530,7 +1529,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "a" {
-					if hideCommand {
+					if viewCommand {
 						m.hideAfterCursor()
 					} else {
 						if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
@@ -1541,14 +1540,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "b" {
-					if hideCommand {
+					if viewCommand {
 						m.hideBeforeCursor()
 					} else {
 						m.onHalfPageUp()
 					}
 				}
 
-				if k == "c" && hideCommand {
+				if k == "c" && viewCommand {
 					m.hideReset()
 					m.lines.SetShowPattern("")
 					m.lines.SetHidePattern("")
@@ -1558,7 +1557,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.onAddCurrentWord()
 				}
 
-				if k == "s" && hideCommand {
+				if k == "s" && viewCommand {
 					m.activeShowTextbox = true
 					m.textbox.Prompt = "regex"
 					m.textbox.SetValue(m.showPattern)
@@ -1567,7 +1566,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
 				}
 
-				if k == "h" && hideCommand {
+				if k == "h" && viewCommand {
 					m.activeHideTextbox = true
 					m.textbox.Prompt = "regex"
 					m.textbox.SetValue(m.hidePattern)
@@ -1576,8 +1575,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cmds = append(cmds, m.textbox.Cursor.BlinkCmd())
 				}
 
-				if k == "H" {
-					m.hideCommand = true
+				if k == "v" {
+					m.viewCommand = true
 				}
 			}
 		}

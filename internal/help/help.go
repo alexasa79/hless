@@ -1,7 +1,6 @@
 package help
 
-var Text =
-`# Hless - Pager for human beings
+var Text = `# Hless - Pager for human beings
 
 ## Basic navigation
 
@@ -49,10 +48,10 @@ a           - Start new search pattern with the selected word. Will NOT search
 A           - Add selected word to the current search pattern with \|\. Will
               NOT search for the next match.
 
-## Hiding portions of the file
+## Show and hide portions of the file
 
-Hiding various portions of the file is available through 'H' keyboard
-shortcut. To enter one of the shortcuts below, first press 'H' and then the
+Hiding various portions of the file is available through 'v' keyboard
+shortcut. To enter one of the shortcuts below, first press 'v' and then the
 shortcut.
 
 a - Hide everything after the current line.
