@@ -1,9 +1,10 @@
-hless:
+all: hless hless-amd64
+
+hless hh:
 	go build -o hh .
 
-hless-amd64:
-	$(MAKE) clean
-	GOOS=linux GOARCH=amd64 $(MAKE) hless
+hless-amd64 hh-amd64:
+	GOOS=linux GOARCH=amd64 go build -o hh-amd64 .
 
 clean:
 	go clean
@@ -20,4 +21,4 @@ logs:
 	./log-gen -s 1000000 logs/million.log
 	./log-gen -s 5000000 logs/five-millions.log
 
-.PHONY: hless hless-x86_64 logs
+.PHONY: hless hless-amd64 logs
