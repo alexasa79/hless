@@ -470,7 +470,7 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		return nil
 	}
 
-	if line.Offset < lines.view.start {
+	if line.Offset <= lines.view.start {
 		return nil
 	}
 
