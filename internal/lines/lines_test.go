@@ -15,7 +15,7 @@ func TestTrivial(t *testing.T) {
 	l := lines.lines.Get(search)
 	utils.Assert(l != nil)
 	utils.Assert(lines.Text(*l) == "hello")
-	utils.Assert((*l).rawLength == 6)
+	utils.Assert((*l).RawLength == 6)
 	utils.Assert((*l).Offset == 0)
 	utils.Assert((*l).Name() == "1")
 	first := l
@@ -30,7 +30,7 @@ func TestTrivial(t *testing.T) {
 	ttt := lines.Text(*l)
 	utils.Assert(ttt != "")
 	utils.Assert(lines.Text(*l) == "worlds")
-	utils.Assert((*l).rawLength == 7)
+	utils.Assert((*l).RawLength == 7)
 	utils.Assert((*l).Offset == 6)
 	utils.Assert((*l).Name() == "2")
 
@@ -47,7 +47,7 @@ func TestCR(t *testing.T) {
 	l := lines.lines.Get(search)
 	utils.Assert(l != nil)
 	utils.Assert(lines.Text(*l) == "hello")
-	utils.Assert((*l).rawLength == 7)
+	utils.Assert((*l).RawLength == 7)
 	utils.Assert((*l).Offset == 0)
 	utils.Assert((*l).Name() == "1")
 	first := l
@@ -57,7 +57,7 @@ func TestCR(t *testing.T) {
 	l = lines.lines.Get(search)
 	utils.Assert(l != nil)
 	utils.Assert(lines.Text(*l) == "worlds")
-	utils.Assert((*l).rawLength == 8)
+	utils.Assert((*l).RawLength == 8)
 	utils.Assert((*l).Offset == 7)
 	utils.Assert((*l).Name() == "2")
 
@@ -75,7 +75,7 @@ func TestMixedEOL(t *testing.T) {
 	utils.Assert(l != nil)
 	utils.Assert((*l).Offset == int64(0))
 	utils.Assert(lines.Text(*l) == "hello")
-	utils.Assert((*l).rawLength == 6)
+	utils.Assert((*l).RawLength == 6)
 	utils.Assert((*l).Name() == "1")
 
 	lines.readForward()
@@ -84,7 +84,7 @@ func TestMixedEOL(t *testing.T) {
 	utils.Assert(lines.Text(l2) == "worlds")
 	utils.Assert(l2.Name() == "2")
 	utils.Assert(l2.Offset == int64(6))
-	utils.Assert(l2.rawLength == 8)
+	utils.Assert(l2.RawLength == 8)
 
 	lines.readForward()
 	l2 = lines.Next(l2)
@@ -92,7 +92,7 @@ func TestMixedEOL(t *testing.T) {
 	utils.Assert(lines.Text(l2) == "foo")
 	utils.Assert(l2.Name() == "3")
 	utils.Assert(l2.Offset == int64(14))
-	utils.Assert(l2.rawLength == 4)
+	utils.Assert(l2.RawLength == 4)
 }
 
 func TestReadBackward(t *testing.T) {
@@ -109,8 +109,8 @@ func TestReadBackward(t *testing.T) {
 	utils.Assert(l != nil)
 	ll := *l
 	utils.Assert(ll.Offset == 3)
-	utils.Assert(ll.rawLength == 4)
-	utils.Assert(ll.len == 3)
+	utils.Assert(ll.RawLength == 4)
+	utils.Assert(ll.Length == 3)
 	utils.Assert(ll.index == -1)
 	utils.Assert(lines.Text(ll) == "345")
 	utils.Assert(ll.Name() == "end-1")
@@ -125,8 +125,8 @@ func TestReadBackward(t *testing.T) {
 	utils.Assert(lines.Text(l2) == "01")
 	utils.Assert(l2.Name() == "end-2")
 	utils.Assert(l2.Offset == 0)
-	utils.Assert(l2.len == 2)
-	utils.Assert(l2.rawLength == 3)
+	utils.Assert(l2.Length == 2)
+	utils.Assert(l2.RawLength == 3)
 }
 
 func TestReadBackward2(t *testing.T) {
@@ -143,8 +143,8 @@ func TestReadBackward2(t *testing.T) {
 	utils.Assert(l != nil)
 	ll := *l
 	utils.Assert(ll.Offset == 4)
-	utils.Assert(ll.rawLength == 5)
-	utils.Assert(ll.len == 3)
+	utils.Assert(ll.RawLength == 5)
+	utils.Assert(ll.Length == 3)
 	utils.Assert(ll.index == -1)
 	utils.Assert(lines.Text(ll) == "456")
 	utils.Assert(ll.Name() == "end-1")
@@ -159,8 +159,8 @@ func TestReadBackward2(t *testing.T) {
 	utils.Assert(lines.Text(l2) == "01")
 	utils.Assert(l2.Name() == "end-2")
 	utils.Assert(l2.Offset == 0)
-	utils.Assert(l2.len == 2)
-	utils.Assert(l2.rawLength == 4)
+	utils.Assert(l2.Length == 2)
+	utils.Assert(l2.RawLength == 4)
 }
 
 func TestBackAndForth(t *testing.T) {

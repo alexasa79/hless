@@ -82,8 +82,8 @@ type Cegment struct {
 type Model struct {
 	ready bool
 
-	buffer *lines.Buffer
-	lines  *lines.Lines
+	buffer                  *lines.Buffer
+	lines                   *lines.Lines
 	backgroundReaderStarted bool
 
 	marks *avltree.AVLTree[*lines.Line]
@@ -131,8 +131,8 @@ type Model struct {
 
 	History *History
 
-	helpActive           bool
-	helpViewport         viewport.Model
+	helpActive   bool
+	helpViewport viewport.Model
 
 	currentWord      int
 	currentWordStyle lipgloss.Style
@@ -969,7 +969,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord in
 func (m *Model) renderStatusBar() string {
 	VL.Debug("Rendering status bar with cursor %v", m.cursorLine)
 
-	if (m.cursorLine == nil) {
+	if m.cursorLine == nil {
 		st1 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, "EMPTY BUFFER"))
 		st2 := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 		return st1 + "\n" + st2
@@ -1172,14 +1172,21 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 
 		if *j.Offset == 100 {
 			m.cursorLine = m.lines.Last()
+			m.centerCursor()
 		} else if *j.Offset == 0 {
 			m.cursorLine = m.lines.First()
+			m.centerCursor()
 		} else {
-			where := float64(m.buffer.Size()) * *j.Offset / 100
-			m.cursorLine = m.lines.At(int64(where))
+			where := int64(float64(m.buffer.Size()) * *j.Offset / 100)
+			first := m.lines.First()
+			last := m.lines.Last()
+			if where >= first.Offset && where < last.Offset+last.RawLength {
+				m.cursorLine = m.lines.At(where)
+				m.centerCursor()
+			} else {
+				m.setError("The offset is outside of visible portion of the file")
+			}
 		}
-
-		m.centerCursor()
 	}
 
 	if j.Lines != nil {
