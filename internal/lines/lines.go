@@ -419,6 +419,10 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 
 		if next != nil {
 			lines.view.lines.Insert(next)
+		} else {
+			LL.Debug("Could not find visible successor of %v. Setting view end at %d",
+				line, line.Offset+line.RawLength)
+			lines.view.end = line.Offset + line.RawLength
 		}
 	} else {
 		next = *nextPtr
@@ -493,6 +497,10 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 
 		if prev != nil {
 			lines.view.lines.Insert(prev)
+		} else {
+			LL.Debug("Could not find visible predecessor of %v. Setting view start at %d",
+				line, line.Offset)
+			lines.view.start = line.Offset
 		}
 	} else {
 		prev = *prevPtr
