@@ -332,24 +332,6 @@ func (lines *Lines) Last() *Line {
 	return res
 }
 
-func (lines *Lines) moveToSection(line *Line, section *Section) {
-	utils.Assert(line.section != section)
-
-	// Works only if the line is at the beginning of its section or at the end of its section.
-	// s2 := line.section
-	// utils.Assert(
-	// 	// Line at the beginning ot its section
-	// 	s2.parsed.start == line.Offset ||
-	// 		// Line at the end of its section
-	// 		s2.parsed.end == line.Offset+line.rawLength,
-	// 	section, line, s2)
-
-	// if int64(s2.parsed.start)+s2.offset == line.Offset {
-	// 	// The line is the first in its section. We have to trim the section's buffer and
-	// 	// (parsedStart, parsedEnd)
-	// }
-}
-
 func (lines *Lines) next(line *Line, iterations int) *Line {
 	// This is a mere protection against bugs. We should be able to iterate as many times as we
 	// need.
@@ -374,10 +356,6 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 		return lines.next(line, iterations+1)
 	} else {
 		if line.Offset+int64(line.RawLength) == int64(next.Offset) {
-			if line.section != next.section {
-				lines.moveToSection(next, line.section)
-			}
-
 			return next
 		} else {
 			lines.readForward()
@@ -453,9 +431,6 @@ func (lines *Lines) prev(line *Line, iterations int) *Line {
 		return lines.prev(line, iterations+1)
 	} else {
 		if prev.Offset+int64(prev.RawLength) == int64(line.Offset) {
-			if line.section != prev.section {
-				lines.moveToSection(line, prev.section)
-			}
 			return prev
 		} else {
 			lines.readBackward()
