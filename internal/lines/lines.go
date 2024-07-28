@@ -48,16 +48,6 @@ type Line struct {
 	section   *Section
 }
 
-type View struct {
-	start int64
-	end   int64
-
-	lines *avltree.AVLTree[*Line]
-
-	showPattern *regexp.Regexp
-	hidePattern *regexp.Regexp
-}
-
 type Lines struct {
 	data *Buffer
 
@@ -88,20 +78,12 @@ func newSection(offset int64, name string) *Section {
 }
 
 func NewLines(data *Buffer) *Lines {
-	view := &View{
-		lines:       avltree.NewAVLTree[*Line](LineComp),
-		start:       0,
-		end:         math.MaxInt64,
-		showPattern: nil,
-		hidePattern: nil,
-	}
-
 	lines := &Lines{
 		data:           data,
 		sections:       avltree.NewAVLTree[*Section](SectionComp),
 		lines:          avltree.NewAVLTree[*Line](LineComp),
 		currentSection: newSection(0, ""),
-		view:           view,
+		view:           NewView(),
 	}
 
 	lines.sections.Insert(lines.currentSection)
@@ -123,8 +105,7 @@ func (s Section) String() string {
 
 func (lines *Lines) readForward() {
 	s := lines.currentSection
-
-	LL.Debug("Reading forward in section %v from offset %d", s, s.read.end)
+	LL.Debug("Reading forwards in section %v from offset %d", s, s.read.end)
 
 	pos := s.read.end
 	for pos < lines.data.Size() {
@@ -147,23 +128,20 @@ func (lines *Lines) readForward() {
 			s.lines++
 			s.nextIndexForward++
 
-			LL.Trace("Added line %v", line)
 			break
 		}
 		pos++
 	}
 	s.read.end = pos + 1
-
-	LL.Debug("Section after reading %v", s)
 }
 
 func (lines *Lines) readBackward() {
 	s := lines.currentSection
+	LL.Debug("Reading backwards in section %v", s)
+
 	if s.read.start == 0 {
 		return
 	}
-
-	LL.Debug("Reading backward in section %v from offset %d", s, s.read.start)
 
 	// s.read.start points at the first character in the last line found string.
 	// Decrementing pos by 1 will get us to point at the \n. Decrementing once again will
@@ -189,7 +167,6 @@ func (lines *Lines) readBackward() {
 			s.lines++
 			s.nextIndexBackward--
 
-			LL.Trace("Added line %v", line)
 			break
 		}
 		pos--
@@ -213,13 +190,9 @@ func (lines *Lines) readBackward() {
 
 		s.lines++
 		s.nextIndexBackward--
-
-		LL.Trace("Added line %v", line)
 	}
 
 	s.read.start = pos + 1
-
-	LL.Debug("Section after reading %v", s)
 }
 
 func (lines *Lines) first(iteration int) *Line {
@@ -243,8 +216,18 @@ func (lines *Lines) First() *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	if lines.view.start != 0 {
+	if lines.view.forcedStart != 0 {
 		return *lines.view.lines.Successor(&Line{Offset: 0})
+	}
+
+	if lines.view.visibleStart != 0 {
+		size := lines.data.Size()
+		lines.jumpTo(size, fmt.Sprintf("@%d", size))
+
+		res := lines.view.lines.Successor(&Line{Offset: 0})
+		utils.Assert(res != nil)
+		utils.Assert((*res).Offset == lines.view.visibleStart, "%d %v", lines.view.visibleStart, *res)
+		return *res
 	}
 
 	res := lines.first(0)
@@ -254,9 +237,9 @@ func (lines *Lines) First() *Line {
 
 	if res != nil {
 		lines.view.lines.Insert(res)
+		lines.view.UpdateVisibleStart(res.Offset)
 	}
 
-	LL.Debug("Asked to return the first line. Returning %v", res)
 	return res
 }
 
@@ -268,12 +251,10 @@ func (lines *Lines) SetFirst(line *Line) {
 		return
 	}
 
-	LL.Debug("Setting the first line to %v", line)
+	lines.view.Reset()
+	lines.view.SetFirst(line)
 
-	lines.view.lines = avltree.NewAVLTree[*Line](LineComp)
-
-	lines.view.lines.Insert(line)
-	lines.view.start = line.Offset
+	LL.Debug("Set first line to %v", line)
 }
 
 func (lines *Lines) SetLast(line *Line) {
@@ -284,24 +265,18 @@ func (lines *Lines) SetLast(line *Line) {
 		return
 	}
 
-	LL.Debug("Setting the last line to %v", line)
+	lines.view.Reset()
+	lines.view.SetLast(line)
 
-	lines.view.lines = avltree.NewAVLTree[*Line](LineComp)
-
-	lines.view.lines.Insert(line)
-	lines.view.end = line.Offset + line.RawLength
+	LL.Debug("Set last line to %v", line)
 }
 
 func (lines *Lines) last(iteration int) *Line {
 	utils.Assert(iteration < 100)
 
 	size := lines.data.Size()
-	LL.Trace("Jumping to offset %d", size)
 	lines.jumpTo(size, fmt.Sprintf("@%d", size))
 	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
-	if t != nil {
-		LL.Trace("Found last line in current section %v", *t)
-	}
 	if t != nil && (*t).Offset+(*t).RawLength >= size {
 		return *t
 	} else {
@@ -314,11 +289,21 @@ func (lines *Lines) Last() *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	if lines.view.end != math.MaxInt64 {
+	if lines.view.forcedEnd != math.MaxInt64 {
 		return *lines.view.lines.Predecessor(&Line{Offset: math.MaxInt64})
 	}
 
-	LL.Trace("Asked to return last line.")
+	if lines.view.visibleEnd != math.MaxInt64 {
+		size := lines.data.Size()
+		lines.jumpTo(size, fmt.Sprintf("@%d", size))
+
+		res := lines.view.lines.Predecessor(&Line{Offset: math.MaxInt64})
+		utils.Assert(res != nil)
+		utils.Assert((*res).Offset+(*res).RawLength == lines.view.visibleEnd,
+			"%d %v", lines.view.visibleEnd, *res)
+		return *res
+	}
+
 	res := lines.last(0)
 	for res != nil && !lines.visible(res) {
 		res = lines.prev(res, 0)
@@ -326,9 +311,9 @@ func (lines *Lines) Last() *Line {
 
 	if res != nil {
 		lines.view.lines.Insert(res)
+		lines.view.UpdateVisibleEnd(res.Offset + res.RawLength)
 	}
 
-	LL.Debug("Asked to return last line. Returning %v", res)
 	return res
 }
 
@@ -340,8 +325,6 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 	}
 
 	if line.Offset+int64(line.RawLength) >= lines.data.Size() {
-		LL.Trace("Line is past end of file %d >= %d",
-			line.Offset+int64(line.RawLength), lines.data.Size())
 		return nil
 	}
 
@@ -368,18 +351,19 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 	mx.Lock()
 	defer mx.Unlock()
 
-	LL.Trace("Asked for next of %v", line)
-
 	if line == nil {
 		return nil
 	}
 
-	if line.Offset+line.RawLength >= lines.view.end {
+	end := line.Offset + line.RawLength
+	if end >= lines.view.forcedEnd || end >= lines.view.visibleEnd {
 		return nil
 	}
 
+	visibleLine := false
 	if lines.visible(line) {
 		lines.view.lines.Insert(line)
+		visibleLine = true
 	}
 
 	nextPtr := lines.view.lines.Successor(line)
@@ -387,20 +371,19 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		next = lines.next(line, 0)
 		for next != nil {
 			if lines.visible(next) {
-				LL.Trace("Next of %v is visible %v", line, next)
 				break
 			} else {
-				LL.Trace("Immediate next of %v is invisible %v. Checking next", line, next)
 				next = lines.next(next, 0)
 			}
 		}
 
 		if next != nil {
 			lines.view.lines.Insert(next)
-		} else {
-			LL.Debug("Could not find visible successor of %v. Setting view end at %d",
-				line, line.Offset+line.RawLength)
-			lines.view.end = line.Offset + line.RawLength
+		} else if visibleLine {
+			utils.Assert(next == nil)
+			LL.Trace("Setting visible end to line %v. Prev end %d",
+				line, lines.view.visibleEnd)
+			lines.view.UpdateVisibleEnd(line.Offset + line.RawLength)
 		}
 	} else {
 		next = *nextPtr
@@ -443,18 +426,18 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 	mx.Lock()
 	defer mx.Unlock()
 
-	LL.Trace("Asked for prev of %v", line)
-
 	if line == nil {
 		return nil
 	}
 
-	if line.Offset <= lines.view.start {
+	if line.Offset <= lines.view.forcedStart || line.Offset <= lines.view.visibleStart {
 		return nil
 	}
 
+	visibleLine := false
 	if lines.visible(line) {
 		lines.view.lines.Insert(line)
+		visibleLine = true
 	}
 
 	prevPtr := lines.view.lines.Predecessor(line)
@@ -462,20 +445,19 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		prev = lines.prev(line, 0)
 		for prev != nil {
 			if lines.visible(prev) {
-				LL.Trace("Prev of %v is visible %v", line, prev)
 				break
 			} else {
-				LL.Trace("Immediate prev of %v is invisible %v. Checking prev", line, prev)
 				prev = lines.prev(prev, 0)
 			}
 		}
 
 		if prev != nil {
 			lines.view.lines.Insert(prev)
-		} else {
-			LL.Debug("Could not find visible predecessor of %v. Setting view start at %d",
-				line, line.Offset)
-			lines.view.start = line.Offset
+		} else if visibleLine {
+			utils.Assert(prev == nil)
+			LL.Trace("Setting visible start to line %v. Prev start %d",
+				line, lines.view.visibleStart)
+			lines.view.UpdateVisibleStart(line.Offset)
 		}
 	} else {
 		prev = *prevPtr
@@ -485,14 +467,14 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 }
 
 func (lines *Lines) jumpTo(offset int64, name string) {
-	LL.Trace("Asked to jump to offset %d, name %s", offset, name)
+	if lines.view.OutOfRange(offset) {
+		return
+	}
 
 	s := Section{read: Range{start: offset, end: offset}}
 	t := lines.sections.Get(&s)
 	if t != nil {
 		lines.currentSection = *t
-		LL.Trace("Set current section to %v when asked to jump to %s",
-			lines.currentSection, name)
 		return
 	}
 
@@ -501,13 +483,9 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 		pred := *t
 		if offset >= pred.read.start && offset < pred.read.end {
 			lines.currentSection = pred
-			LL.Trace("Set current section to %v when asked to jump to %s",
-				lines.currentSection, name)
 			return
 		} else if offset == pred.read.end {
 			lines.currentSection = pred
-			LL.Trace("Set current section to %v when asked to jump to %s",
-				lines.currentSection, name)
 			return
 		}
 	}
@@ -516,23 +494,17 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 
 	lines.currentSection = section
 	lines.sections.Insert(section)
-
-	LL.Debug("Started new section %v", section)
 }
 
 func (lines *Lines) JumpTo(offset int64, name string) {
 	mx.Lock()
 	defer mx.Unlock()
 
-	if offset < lines.view.start || offset >= lines.view.end {
-		return
-	}
-
 	lines.jumpTo(offset, name)
 }
 
 func (lines *Lines) at(offset int64) *Line {
-	if offset < lines.view.start || offset >= lines.view.end {
+	if lines.view.OutOfRange(offset) {
 		return nil
 	}
 
@@ -543,12 +515,8 @@ func (lines *Lines) at(offset int64) *Line {
 
 	t := lines.lines.Predecessor(&Line{Offset: offset})
 	if t != nil && (*t).section == s {
-		LL.Debug("Asked for line at offset of %d, with section name %s. Returning %+v",
-			offset, name, *t)
 		return *t
 	}
-
-	LL.Debug("Reading around in section %v from offset %d", s, s.read.end)
 
 	// Read back until we run into end of line. Then read forward...
 	pos := offset
@@ -559,8 +527,6 @@ func (lines *Lines) at(offset int64) *Line {
 		}
 		pos--
 	}
-
-	LL.Trace("Found new line starting from position %d", pos)
 
 	// Making sure that next line we add in readForward will get index 0. Forward index
 	// is set to 1 by default to accomodate the first section. This does not work for
@@ -574,9 +540,6 @@ func (lines *Lines) at(offset int64) *Line {
 	t = lines.lines.Get(&Line{Offset: pos})
 	utils.Assert(t != nil, offset, name)
 
-	LL.Debug("Asked for line at offset of %d, with section name %s. Returning %+v",
-		offset, name, *t)
-
 	return *t
 }
 
@@ -584,7 +547,9 @@ func (lines *Lines) At(offset int64) *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	LL.Debug("Asked to return the line at offset %d", offset)
+	if lines.view.OutOfRange(offset) {
+		return nil
+	}
 
 	line := lines.at(offset)
 	prev := line
@@ -607,12 +572,11 @@ func (lines *Lines) At(offset int64) *Line {
 		lines.view.lines.Insert(line)
 	}
 
-	LL.Debug("Returning %v", line)
 	return line
 }
 
 func (lines *Lines) visible(line *Line) bool {
-	if line.Offset < lines.view.start || line.Offset >= lines.view.end {
+	if lines.view.OutOfRange(line.Offset) {
 		return false
 	}
 
@@ -660,8 +624,7 @@ func (lines *Lines) SetShowPattern(pat string) {
 		lines.view.showPattern = nil
 	}
 
-	lines.view.lines = avltree.NewAVLTree[*Line](LineComp)
-
+	lines.view.Reset()
 	LL.Debug("Set show pattern to %s", pat)
 }
 
@@ -675,8 +638,7 @@ func (lines *Lines) SetHidePattern(pat string) {
 		lines.view.hidePattern = nil
 	}
 
-	lines.view.lines = avltree.NewAVLTree[*Line](LineComp)
-
+	lines.view.Reset()
 	LL.Debug("Set hide pattern to %s", pat)
 }
 
