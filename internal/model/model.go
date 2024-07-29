@@ -222,7 +222,6 @@ func InitialModel(b *lines.Buffer) *Model {
 			Background(lipgloss.Color("#00a0e4")),
 
 		searchStyles: [9]lipgloss.Style{
-			lipgloss.NewStyle().Background(lipgloss.Color("#f48fb1")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#ce93d8")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#b39ddb")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#9fa8da")).Foreground(lipgloss.Color("#000000")),
@@ -231,6 +230,7 @@ func InitialModel(b *lines.Buffer) *Model {
 			lipgloss.NewStyle().Background(lipgloss.Color("#80deea")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#80cbc4")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#a5d6a7")).Foreground(lipgloss.Color("#000000")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#f48fb1")).Foreground(lipgloss.Color("#000000")),
 		},
 
 		searches:     [9]Search{},
