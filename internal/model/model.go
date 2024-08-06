@@ -223,14 +223,14 @@ func InitialModel(b *lines.Buffer) *Model {
 
 		searchStyles: [9]lipgloss.Style{
 			lipgloss.NewStyle().Background(lipgloss.Color("#ce93d8")).Foreground(lipgloss.Color("#000000")),
-			lipgloss.NewStyle().Background(lipgloss.Color("#b39ddb")).Foreground(lipgloss.Color("#000000")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#d1c4e9")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#9fa8da")).Foreground(lipgloss.Color("#000000")),
-			lipgloss.NewStyle().Background(lipgloss.Color("#90caf9")).Foreground(lipgloss.Color("#000000")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#bbdefb")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#81d4fa")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#80deea")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#80cbc4")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#a5d6a7")).Foreground(lipgloss.Color("#000000")),
-			lipgloss.NewStyle().Background(lipgloss.Color("#f48fb1")).Foreground(lipgloss.Color("#000000")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#dcedc8")).Foreground(lipgloss.Color("#000000")),
 		},
 
 		searches:     [9]Search{},
