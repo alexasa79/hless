@@ -130,7 +130,8 @@ type Model struct {
 	helpActive   bool
 	helpViewport viewport.Model
 
-	currentWord      int
+	selectionStart   int
+	selectionEnd     int
 	currentWordStyle lipgloss.Style
 
 	viewCommand bool
@@ -243,7 +244,9 @@ func InitialModel(b *lines.Buffer) *Model {
 
 		helpViewport: viewport.New(0, 0),
 
-		currentWord: -1,
+		selectionStart: -1,
+		selectionEnd:   -1,
+
 		currentWordStyle: lipgloss.
 			NewStyle().
 			Background(lipgloss.Color("#ff7777")).
@@ -381,36 +384,65 @@ func (m *Model) onKeyDown() {
 	}
 }
 
+func (m *Model) findCurrentWord(words []utils.Word) int {
+	currentWord := -1
+	if m.selectionStart >= 0 {
+		for i, w := range words {
+			if w.Start <= m.selectionEnd && m.selectionStart <= w.End {
+				currentWord = i
+				break
+			}
+		}
+	}
+	return currentWord
+}
+
 func (m *Model) onKeyLeft() {
 	line := m.lines.Text(m.cursorLine)
 	words := utils.SplitWords(line)
-	m.currentWord -= 1
-	if m.currentWord < 0 {
-		m.currentWord = len(words) - 1
+	currentWord := m.findCurrentWord(words)
+	if currentWord >= 0 {
+		currentWord -= 1
+		if currentWord < 0 {
+			currentWord = len(words) - 1
+		}
+	} else {
+		currentWord = len(words) - 1
 	}
+	m.selectionStart = words[currentWord].Start
+	m.selectionEnd = words[currentWord].End
 }
 
 func (m *Model) onKeyRight() {
 	line := m.lines.Text(m.cursorLine)
 	words := utils.SplitWords(line)
-	m.currentWord += 1
-	if m.currentWord >= len(words) {
-		m.currentWord = 0
+	currentWord := m.findCurrentWord(words)
+	if currentWord >= 0 {
+		currentWord += 1
+		if currentWord >= len(words) {
+			currentWord = 0
+		}
+	} else {
+		currentWord = 0
 	}
+	m.selectionStart = words[currentWord].Start
+	m.selectionEnd = words[currentWord].End
 }
 
 func (m *Model) onAddCurrentWord() {
-	if m.currentWord == -1 {
+	line := m.lines.Text(m.cursorLine)
+	words := utils.SplitWords(line)
+	currentWord := m.findCurrentWord(words)
+
+	if currentWord == -1 {
 		return
 	}
 
-	line := m.lines.Text(m.cursorLine)
-	words := utils.SplitWords(line)
-	if m.currentWord >= len(words) {
-		m.currentWord = -1
+	if currentWord >= len(words) {
+		currentWord = -1
 		return
 	}
-	word := words[m.currentWord].Word
+	word := words[currentWord].Word
 
 	m.searches[m.search].regex = true
 	if m.searches[m.search].pattern == "" {
@@ -418,19 +450,24 @@ func (m *Model) onAddCurrentWord() {
 	} else {
 		m.searches[m.search].pattern += "|" + word
 	}
+
+	m.selectionStart = -1
+	m.selectionEnd = -1
 }
 
 func (m *Model) onAddCurrentWordShowPattern() {
 	line := m.lines.Text(m.cursorLine)
 	words := utils.SplitWords(line)
-	if m.currentWord >= len(words) {
-		m.currentWord = -1
+	currentWord := m.findCurrentWord(words)
+
+	if currentWord >= len(words) {
+		currentWord = -1
 		return
 	}
 	if m.showPattern == "" {
-		m.showPattern = words[m.currentWord].Word
+		m.showPattern = words[currentWord].Word
 	} else {
-		m.showPattern = fmt.Sprintf("%s|%s", m.showPattern, words[m.currentWord].Word)
+		m.showPattern = fmt.Sprintf("%s|%s", m.showPattern, words[currentWord].Word)
 	}
 	m.lines.SetShowPattern(m.showPattern)
 	m.fixCursor()
@@ -914,7 +951,7 @@ func (m *Model) segmentize(l *lines.Line) []string {
 	return res
 }
 
-func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord int, boldStyle *lipgloss.Style) []Cegment {
+func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style) []Cegment {
 	segs := m.segmentize(l)
 	r0 := make([]utils.Range, 0)
 
@@ -926,14 +963,11 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord in
 	}
 
 	var boldCeg CegmentRange
-	if boldWord != -1 {
-		words := utils.SplitWords(line)
-		if boldWord < len(words) {
-			boldCeg = CegmentRange{start: words[boldWord].Start, end: words[boldWord].End, style: boldStyle}
-			r2 := make([]utils.Range, 0)
-			r2 = append(r2, boldCeg)
-			r0 = utils.RangesProduct(r0, r2)
-		}
+	if boldStart != -1 {
+		boldCeg = CegmentRange{start: boldStart, end: boldEnd, style: boldStyle}
+		r2 := make([]utils.Range, 0)
+		r2 = append(r2, boldCeg)
+		r0 = utils.RangesProduct(r0, r2)
 	}
 
 	for i := 0; i < len(m.searches); i++ {
@@ -953,7 +987,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldWord in
 
 		r0 = utils.RangesProduct(r0, r1)
 
-		if boldWord >= 0 {
+		if boldStart >= 0 {
 			r2 := make([]utils.Range, 0)
 			r2 = append(r2, boldCeg)
 			r0 = utils.RangesProduct(r0, r2)

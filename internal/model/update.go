@@ -458,7 +458,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.prevCursorLine != m.cursorLine {
 		m.prevCursorLine = m.cursorLine
-		m.currentWord = -1
+		m.selectionStart = -1
+		m.selectionEnd = -1
 	}
 
 	ML.Debug("Returning commands %v", cmds)
