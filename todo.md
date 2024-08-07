@@ -1,5 +1,5 @@
 # Bugs
-1. [ ] 'a' adds the selected word to the next search pattern after currently selected and not to the next available search pattern.
+1. [x] 'a' adds the selected word to the next search pattern after currently selected and not to the next available search pattern.
 2. [x] search colors 4 and 5 are almost identical.
 
 # Features

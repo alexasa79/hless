@@ -343,10 +343,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if viewCommand {
 						m.hideAfterCursor()
 					} else {
-						if m.searches[m.search].pattern != "" && m.searchHits[m.search].Count() != 0 {
-							m.search = (m.search + 1) % len(m.searches)
+						for i := 0; i < len(m.searches); i++ {
+							if m.searches[m.search].pattern != "" {
+								m.search = (m.search + 1) % len(m.searches)
+							} else {
+								break
+							}
 						}
-						m.onAddCurrentWord()
+
+						if m.searches[m.search].pattern == "" {
+							m.onAddCurrentWord()
+						} else {
+							m.setError("Out of search slots")
+						}
 					}
 				}
 
