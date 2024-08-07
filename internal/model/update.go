@@ -132,12 +132,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.searchRanges[m.search] = avltree.NewAVLTree(searchRangeComp)
 					}
 
-					if m.activeSearchDirection == SEARCH_DOWN {
-						cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
-						cmds = append(cmds, cmd)
-					} else if m.activeSearchDirection == SEARCH_UP {
-						cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
-						cmds = append(cmds, cmd)
+					if m.searches[m.search].pattern == "" {
+						m.search = m.prevSearch
+					} else {
+						if m.activeSearchDirection == SEARCH_DOWN {
+							cmd = m.startProgress("Searching", m.findNextWithProgress(m.search))
+							cmds = append(cmds, cmd)
+						} else if m.activeSearchDirection == SEARCH_UP {
+							cmd = m.startProgress("Searching", m.findPrevWithProgress(m.search))
+							cmds = append(cmds, cmd)
+						}
 					}
 				} else if k == "tab" {
 					m.newSearch.regex = !m.newSearch.regex
@@ -247,8 +251,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "e" {
-					m.prevSearch = m.search
-
 					m.newSearch = m.searches[m.search]
 					m.textbox.SetValue(m.newSearch.pattern)
 					m.textbox.SetCursor(len(m.newSearch.pattern))
