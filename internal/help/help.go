@@ -31,22 +31,24 @@ search patterns, up to 9. The typical n and N search for the last search
 pattern. / and ? will start a new search with a new pattern. Every search
 pattern match is shown with a different color.
 
-n           - Search down for the current search pattern.
-N           - Search up for the current search pattern.
-/           - Will start new search pattern. After entering the search
-              pattern, search down.
-?           - Start new search pattern. After entering the pattern, search up.
-1-9         - Search down for the respective search pattern.
-1-9 + Shift - Search for the respetive search pattern.
-e           - Edit the current search pattern.
-F2 or [     - Switch to the previous search pattern.
-F4 or ]     - Switch to the next search pattern.
-Left        - Select the previous word on the current line.
-Right       - Select the next word on the current line.
-a           - Start new search pattern with the selected word. Will NOT search
-              for the next match.
-A           - Add selected word to the current search pattern with \|\. Will
-              NOT search for the next match.
+n             - Search down for the current search pattern.
+N             - Search up for the current search pattern.
+/             - Will start new search pattern. After entering the search
+                pattern, search down.
+?             - Start new search pattern. After entering the pattern, search up.
+1-9           - Search down for the respective search pattern.
+1-9 + Shift   - Search for the respetive search pattern.
+e             - Edit the current search pattern.
+F2 or [       - Switch to the previous search pattern.
+F4 or ]       - Switch to the next search pattern.
+Left          - Select the previous word on the current line.
+Left + Shift  - Expand selection left to the next word.
+Right         - Select the next word on the current line.
+Right + Shift - Expand selection right to the next word.
+a             - Start new search pattern with the selected word. Will NOT search
+                for the next match.
+A             - Add selected word to the current search pattern with \|\. Will
+                NOT search for the next match.
 
 ## Show and hide portions of the file
 

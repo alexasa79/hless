@@ -335,8 +335,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.onKeyLeft()
 				}
 
+				if k == "shift+left" {
+					m.onExpandSelectionLeft()
+				}
+
 				if k == "right" {
 					m.onKeyRight()
+				}
+
+				if k == "shift+right" {
+					m.onExpandSelectionRight()
 				}
 
 				if k == "a" {

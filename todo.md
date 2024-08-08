@@ -5,4 +5,4 @@
 # Features
 1. [ ] Support more marker colors.
 2. [ ] Select a line and show timestamp relative to that line.
-3. [ ] Allow adding more characters or words to the selected word with shift+arrows.
+3. [x] Allow adding more characters or words to the selected word with shift+arrows.

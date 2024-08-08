@@ -130,9 +130,10 @@ type Model struct {
 	helpActive   bool
 	helpViewport viewport.Model
 
-	selectionStart   int
-	selectionEnd     int
-	currentWordStyle lipgloss.Style
+	selectionStart     int
+	selectionEnd       int
+	selectionFirstWord int
+	currentWordStyle   lipgloss.Style
 
 	viewCommand bool
 
@@ -384,71 +385,143 @@ func (m *Model) onKeyDown() {
 	}
 }
 
-func (m *Model) findCurrentWord(words []utils.Word) int {
-	currentWord := -1
+func (m *Model) findSelectedWords(words []utils.Word) []int {
+	findings := make([]int, 0)
 	if m.selectionStart >= 0 {
 		for i, w := range words {
 			if w.Start <= m.selectionEnd && m.selectionStart <= w.End {
-				currentWord = i
-				break
+				findings = append(findings, i)
 			}
 		}
 	}
-	return currentWord
+	return findings
 }
 
 func (m *Model) onKeyLeft() {
 	line := m.lines.Text(m.cursorLine)
 	words := utils.SplitWords(line)
-	currentWord := m.findCurrentWord(words)
-	if currentWord >= 0 {
-		currentWord -= 1
-		if currentWord < 0 {
-			currentWord = len(words) - 1
+	selectedWords := m.findSelectedWords(words)
+	if len(selectedWords) > 0 {
+		firstWord := selectedWords[0]
+		if firstWord > 0 {
+			firstWord--
+		} else {
+			firstWord = len(words) - 1
+		}
+		m.selectionStart = words[firstWord].Start
+		m.selectionEnd = words[firstWord].End
+		m.selectionFirstWord = firstWord
+	} else {
+		if len(words) > 0 {
+			m.selectionStart = words[len(words)-1].Start
+			m.selectionEnd = words[len(words)-1].End
+			m.selectionFirstWord = len(words) - 1
+		}
+	}
+}
+
+func (m *Model) onExpandSelectionLeft() {
+	if m.selectionStart < 0 {
+		return
+	}
+
+	line := m.lines.Text(m.cursorLine)
+	words := utils.SplitWords(line)
+	selectedWords := m.findSelectedWords(words)
+	nWords := len(selectedWords)
+	if nWords == 0 || len(words) == 0 {
+		return
+	}
+
+	firstSelectedWord := selectedWords[0]
+	lastSelectedWord := selectedWords[len(selectedWords)-1]
+
+	utils.Assert(m.selectionFirstWord == firstSelectedWord ||
+		m.selectionFirstWord == lastSelectedWord)
+
+	if nWords == 1 {
+		m.selectionFirstWord = firstSelectedWord
+		if m.selectionFirstWord > 0 {
+			m.selectionStart = words[m.selectionFirstWord-1].Start
 		}
 	} else {
-		currentWord = len(words) - 1
+		if m.selectionFirstWord == firstSelectedWord {
+			m.selectionEnd = words[lastSelectedWord-1].End
+		} else {
+			m.selectionStart = words[firstSelectedWord-1].Start
+		}
 	}
-	m.selectionStart = words[currentWord].Start
-	m.selectionEnd = words[currentWord].End
 }
 
 func (m *Model) onKeyRight() {
 	line := m.lines.Text(m.cursorLine)
 	words := utils.SplitWords(line)
-	currentWord := m.findCurrentWord(words)
-	if currentWord >= 0 {
-		currentWord += 1
-		if currentWord >= len(words) {
-			currentWord = 0
+	selectedWords := m.findSelectedWords(words)
+	if len(selectedWords) > 0 {
+		lastWord := selectedWords[len(selectedWords)-1]
+		lastWord = (lastWord + 1) % len(words)
+		m.selectionStart = words[lastWord].Start
+		m.selectionEnd = words[lastWord].End
+		m.selectionFirstWord = lastWord
+	} else {
+		if len(words) > 0 {
+			m.selectionStart = words[0].Start
+			m.selectionEnd = words[0].End
+			m.selectionFirstWord = 0
+		}
+	}
+}
+
+func (m *Model) onExpandSelectionRight() {
+	if m.selectionStart < 0 {
+		return
+	}
+
+	line := m.lines.Text(m.cursorLine)
+	words := utils.SplitWords(line)
+	selectedWords := m.findSelectedWords(words)
+	nSelectedWords := len(selectedWords)
+	if nSelectedWords == 0 || len(words) == 0 {
+		return
+	}
+
+	firstSelectedWord := selectedWords[0]
+	lastSelectedWord := selectedWords[len(selectedWords)-1]
+
+	utils.Assert(m.selectionFirstWord == firstSelectedWord ||
+		m.selectionFirstWord == lastSelectedWord)
+
+	if nSelectedWords == 1 {
+		m.selectionFirstWord = firstSelectedWord
+		if m.selectionFirstWord < len(words)-1 {
+			m.selectionEnd = words[m.selectionFirstWord+1].End
 		}
 	} else {
-		currentWord = 0
+		if m.selectionFirstWord == firstSelectedWord {
+			m.selectionEnd = words[lastSelectedWord+1].End
+		} else {
+			m.selectionStart = words[firstSelectedWord+1].Start
+		}
 	}
-	m.selectionStart = words[currentWord].Start
-	m.selectionEnd = words[currentWord].End
 }
 
 func (m *Model) onAddCurrentWord() {
 	line := m.lines.Text(m.cursorLine)
 	words := utils.SplitWords(line)
-	currentWord := m.findCurrentWord(words)
+	selectedWords := m.findSelectedWords(words)
 
-	if currentWord == -1 {
+	if len(selectedWords) == 0 {
 		return
 	}
 
-	if currentWord >= len(words) {
-		currentWord = -1
-		return
-	}
-	word := words[currentWord].Word
+	start := words[selectedWords[0]].Start
+	end := words[selectedWords[len(selectedWords)-1]].End
 
 	m.searches[m.search].regex = true
 	if m.searches[m.search].pattern == "" {
-		m.searches[m.search].pattern = word
+		m.searches[m.search].pattern = line[start:end]
 	} else {
-		m.searches[m.search].pattern += "|" + word
+		m.searches[m.search].pattern += "|" + line[start:end]
 	}
 
 	m.selectionStart = -1
@@ -458,16 +531,19 @@ func (m *Model) onAddCurrentWord() {
 func (m *Model) onAddCurrentWordShowPattern() {
 	line := m.lines.Text(m.cursorLine)
 	words := utils.SplitWords(line)
-	currentWord := m.findCurrentWord(words)
+	selectedWords := m.findSelectedWords(words)
 
-	if currentWord >= len(words) {
-		currentWord = -1
+	if len(selectedWords) == 0 {
 		return
 	}
+
+	start := words[selectedWords[0]].Start
+	end := words[selectedWords[len(selectedWords)-1]].End
+
 	if m.showPattern == "" {
-		m.showPattern = words[currentWord].Word
+		m.showPattern = line[start:end]
 	} else {
-		m.showPattern = fmt.Sprintf("%s|%s", m.showPattern, words[currentWord].Word)
+		m.showPattern = fmt.Sprintf("%s|%s", m.showPattern, line[start:end])
 	}
 	m.lines.SetShowPattern(m.showPattern)
 	m.fixCursor()
