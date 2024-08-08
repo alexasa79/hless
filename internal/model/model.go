@@ -75,6 +75,11 @@ type Cegment struct {
 	style       []*lipgloss.Style
 }
 
+type MarkLine struct {
+	line  *lines.Line
+	style int
+}
+
 type Model struct {
 	ready bool
 
@@ -82,7 +87,7 @@ type Model struct {
 	lines                   *lines.Lines
 	backgroundReaderStarted bool
 
-	marks *avltree.AVLTree[*lines.Line]
+	marks *avltree.AVLTree[*MarkLine]
 
 	top            Position
 	prevCursorLine *lines.Line
@@ -97,7 +102,7 @@ type Model struct {
 	statusStyle  lipgloss.Style
 	promptStyle  lipgloss.Style
 	editorStyle  lipgloss.Style
-	markStyle    lipgloss.Style
+	markStyle    [3]lipgloss.Style
 
 	searchStyles [9]lipgloss.Style
 
@@ -186,6 +191,16 @@ func searchRangeComp(a, b SearchRange) int {
 	return int64Comp(a.start, b.start)
 }
 
+func markLineComp(a, b *MarkLine) int {
+	if a.line.Offset < b.line.Offset {
+		return -1
+	} else if a.line.Offset == b.line.Offset {
+		return 0
+	} else {
+		return 1
+	}
+}
+
 func InitialModel(b *lines.Buffer) *Model {
 	m := Model{
 		ready: false,
@@ -196,7 +211,7 @@ func InitialModel(b *lines.Buffer) *Model {
 		top:        Position{nil, 0},
 		cursorLine: nil,
 
-		marks: avltree.NewAVLTree(lines.LineComp),
+		marks: avltree.NewAVLTree(markLineComp),
 
 		defaultStyle: lipgloss.NewStyle(),
 		cursorStyle: lipgloss.
@@ -219,10 +234,11 @@ func InitialModel(b *lines.Buffer) *Model {
 			NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
 			Foreground(lipgloss.Color("#000000")),
-		markStyle: lipgloss.
-			NewStyle().
-			Background(lipgloss.Color("#00a0e4")),
-
+		markStyle: [3]lipgloss.Style{
+			lipgloss.NewStyle().Background(lipgloss.Color("#1976d2")).Foreground(lipgloss.Color("#ffffff")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#e65100")).Foreground(lipgloss.Color("#ffffff")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#2e7d32")).Foreground(lipgloss.Color("#ffffff")),
+		},
 		searchStyles: [9]lipgloss.Style{
 			lipgloss.NewStyle().Background(lipgloss.Color("#ce93d8")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#d1c4e9")).Foreground(lipgloss.Color("#000000")),
@@ -606,10 +622,22 @@ func (m *Model) onHalfPageDown() {
 
 func (m *Model) onToggleMark() {
 	ML.Info("Toggling mark at position %v", m.cursorLine)
-	if m.marks.Contains(m.cursorLine) {
-		m.marks.Remove(m.cursorLine)
+	ml := m.marks.Get(&MarkLine{line: m.cursorLine})
+	if ml != nil {
+		m.marks.Remove(*ml)
+		if (*ml).style < len(m.markStyle)-1 {
+			n := &MarkLine{
+				line:  m.cursorLine,
+				style: ((*ml).style + 1) % len(m.markStyle),
+			}
+			m.marks.Insert(n)
+		}
 	} else {
-		m.marks.Insert(m.cursorLine)
+		n := &MarkLine{
+			line:  m.cursorLine,
+			style: 0,
+		}
+		m.marks.Insert(n)
 	}
 }
 
@@ -992,17 +1020,19 @@ func (m *Model) fixCursor() {
 }
 
 func (m *Model) nextMark() {
-	succ := m.marks.Successor(m.cursorLine)
+	ml := &MarkLine{line: m.cursorLine}
+	succ := m.marks.Successor(ml)
 	if succ != nil {
-		m.cursorLine = *succ
+		m.cursorLine = (*succ).line
 		m.centerCursor()
 	}
 }
 
 func (m *Model) prevMark() {
-	pred := m.marks.Predecessor(m.cursorLine)
+	ml := &MarkLine{line: m.cursorLine}
+	pred := m.marks.Predecessor(ml)
 	if pred != nil {
-		m.cursorLine = *pred
+		m.cursorLine = (*pred).line
 		m.centerCursor()
 	}
 }

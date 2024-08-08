@@ -3,7 +3,7 @@ package model
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
+	"time"
 
 	"github.com/alexasa79/hless/internal/lines"
 	"github.com/alexasa79/hless/internal/utils"
@@ -88,6 +88,114 @@ func (m *Model) renderProgress() string {
 	return res
 }
 
+func (m *Model) renderStatusHeader(cts *time.Time) string {
+	res := fmt.Sprintf("Line %s @%d ", m.cursorLine.Name(), m.cursorLine.Offset)
+	if cts != nil {
+		res += cts.String()
+	}
+	return m.statusStyle.Render(res)
+}
+
+func (m *Model) renderStatusMarks(cts *time.Time) string {
+	rawMarks := ""
+	renderedMarks := ""
+
+	for i := 0; i < len(m.markStyle); i++ {
+		mls := MarkLine{line: m.cursorLine}
+		ml := m.marks.Get(&mls)
+		if ml != nil && (*ml).style != i {
+			ml = nil
+		}
+		pred := m.marks.Predecessor(&mls)
+		for pred != nil && (*pred).style != i {
+			pred = m.marks.Predecessor(*pred)
+		}
+		succ := m.marks.Successor(&mls)
+		for succ != nil && (*succ).style != i {
+			succ = m.marks.Successor(*succ)
+		}
+
+		ms := make([]string, 0)
+		if pred != nil {
+			ms = append(ms, fmt.Sprintf("↑%s", lines.Distance((*pred).line, m.cursorLine)))
+			ttt := utils.ExtractTimestamp(m.lines.Text((*pred).line))
+			if cts != nil && ttt != nil {
+				ms = append(ms, (*cts).Sub(*ttt).String())
+			}
+		}
+		if ml != nil {
+			ms = append(ms, "†")
+		}
+		if succ != nil {
+			ms = append(ms, fmt.Sprintf("%s↓", lines.Distance((*succ).line, m.cursorLine)))
+			ttt := utils.ExtractTimestamp(m.lines.Text((*succ).line))
+			if cts != nil && ttt != nil {
+				ms = append(ms, (*ttt).Sub(*cts).String())
+			}
+		}
+
+		rawMarks += strings.Join(ms, " ")
+		renderedMarks += m.markStyle[i].Render(strings.Join(ms, " "))
+	}
+
+	return renderedMarks
+}
+
+func (m *Model) renderStatusSearch(cts *time.Time) string {
+	res := m.statusStyle.Render("")
+
+	for i := 0; i < len(m.searches); i++ {
+		if m.searches[i].pattern == "" {
+			continue
+		}
+
+		// var pred *lines.Line = nil
+		predSearchHit := m.searchHits[i].Predecessor(m.cursorLine)
+		if predSearchHit != nil && !m.lines.Visible(*predSearchHit) {
+			predSearchHit = nil
+		}
+
+		succSearchHit := m.searchHits[i].Successor(m.cursorLine)
+		if succSearchHit != nil && !m.lines.Visible(*succSearchHit) {
+			succSearchHit = nil
+		}
+
+		sh := make([]string, 0)
+		if predSearchHit != nil {
+			sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*predSearchHit, m.cursorLine)))
+			ttt := utils.ExtractTimestamp(m.lines.Text(*predSearchHit))
+			if ttt != nil && cts != nil {
+				sh = append(sh, (cts.Sub(*ttt).String()))
+			}
+		}
+
+		if succSearchHit != nil {
+			sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succSearchHit, m.cursorLine)))
+			ttt := utils.ExtractTimestamp(m.lines.Text(*succSearchHit))
+			if ttt != nil && cts != nil {
+				sh = append(sh, (ttt.Sub(*cts).String()))
+			}
+		}
+
+		sh = append(sh, fmt.Sprintf("◎%d", m.searchHits[i].Count()))
+
+		text := strings.Join(sh, " ")
+
+		if i == m.search {
+			m.searchStyles[i].Bold(true)
+			m.searchStyles[i].Underline(true)
+		}
+
+		res += m.searchStyles[i].Render(text)
+		m.searchStyles[i].Bold(false)
+		m.searchStyles[i].Underline(false)
+
+		res += m.statusStyle.Render(" ")
+	}
+
+	return res
+}
+
 func (m *Model) renderStatusBar() string {
 	VL.Debug("Rendering status bar with cursor %v", m.cursorLine)
 
@@ -97,110 +205,29 @@ func (m *Model) renderStatusBar() string {
 		return st1 + "\n" + st2
 	}
 
-	cont := m.marks.Contains(m.cursorLine)
-	pred := m.marks.Predecessor(m.cursorLine)
-	succ := m.marks.Successor(m.cursorLine)
+	cts := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
 
-	ll := ""
-	ll = fmt.Sprintf("Line %s @%d ", m.cursorLine.Name(), m.cursorLine.Offset)
-	tt := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
-	if tt != nil {
-		ll += tt.String()
-	}
-
-	ms := make([]string, 0)
-	if pred != nil {
-		ms = append(ms, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
-		ttt := utils.ExtractTimestamp(m.lines.Text(*pred))
-		if tt != nil && ttt != nil {
-			ms = append(ms, (*tt).Sub(*ttt).String())
-		}
-	}
-	if cont {
-		ms = append(ms, "†")
-	}
-	if succ != nil {
-		ms = append(ms, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
-		ttt := utils.ExtractTimestamp(m.lines.Text(*succ))
-		if tt != nil && ttt != nil {
-			ms = append(ms, (*ttt).Sub(*tt).String())
-		}
-	}
-	marks := strings.Join(ms, " ")
-
-	rest := fmt.Sprintf("%-*s",
-		m.width-(utf8.RuneCountInString(ll)+utf8.RuneCountInString(marks)), "")
+	st1 := m.renderStatusHeader(cts)
+	marks := m.renderStatusMarks(cts)
 
 	if marks != "" {
-		ll += " "
+		st1 += m.statusStyle.Render(" ") + marks
 	}
 
 	if m.viewCommand {
-		ll += " VIEW "
+		st1 += m.statusStyle.Render(" VIEW ")
 	}
 
-	st1 := m.statusStyle.Render(ll)
-	st1 += m.markStyle.Render(marks)
-	st1 += m.statusStyle.Render(rest)
+	st1 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 
 	st2 := ""
-
 	if m.activeError {
 		st2 += m.errorStyle.Render(fmt.Sprintf("%-*s", m.width, m.errorText))
 	} else {
-		st2 = m.statusStyle.Render("")
-
-		for i := 0; i < len(m.searches); i++ {
-			if m.searches[i].pattern == "" {
-				continue
-			}
-
-			// var pred *lines.Line = nil
-			pred = m.searchHits[i].Predecessor(m.cursorLine)
-			if pred != nil && !m.lines.Visible(*pred) {
-				pred = nil
-			}
-
-			succ = m.searchHits[i].Successor(m.cursorLine)
-			if succ != nil && !m.lines.Visible(*succ) {
-				succ = nil
-			}
-
-			sh := make([]string, 0)
-			if pred != nil {
-				sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*pred, m.cursorLine)))
-				ttt := utils.ExtractTimestamp(m.lines.Text(*pred))
-				if ttt != nil && tt != nil {
-					sh = append(sh, (tt.Sub(*ttt).String()))
-				}
-			}
-
-			if succ != nil {
-				sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succ, m.cursorLine)))
-				ttt := utils.ExtractTimestamp(m.lines.Text(*succ))
-				if ttt != nil && tt != nil {
-					sh = append(sh, (ttt.Sub(*tt).String()))
-				}
-			}
-
-			sh = append(sh, fmt.Sprintf("◎%d", m.searchHits[i].Count()))
-
-			text := strings.Join(sh, " ")
-
-			if i == m.search {
-				m.searchStyles[i].Bold(true)
-				m.searchStyles[i].Underline(true)
-			}
-
-			st2 += m.searchStyles[i].Render(text)
-			m.searchStyles[i].Bold(false)
-			m.searchStyles[i].Underline(false)
-
-			st2 += m.statusStyle.Render(" ")
-		}
-
-		st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
+		st2 += m.renderStatusSearch(cts)
 	}
+
+	st2 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
 
 	return st1 + "\n" + st2
 }
@@ -236,8 +263,10 @@ func (m *Model) View() string {
 		if m.cursorLine == current.Line {
 			cegs = m.cegmentize(current.Line, &m.cursorStyle, m.selectionStart, m.selectionEnd, &m.currentWordStyle)
 		} else {
-			if m.marks.Contains(current.Line) {
-				cegs = m.cegmentize(current.Line, &m.markStyle, -1, -1, &m.currentWordStyle)
+			mls := MarkLine{line: current.Line}
+			ml := m.marks.Get(&mls)
+			if ml != nil {
+				cegs = m.cegmentize(current.Line, &m.markStyle[(*ml).style], -1, -1, &m.currentWordStyle)
 			} else {
 				cegs = m.cegmentize(current.Line, &m.defaultStyle, -1, -1, &m.currentWordStyle)
 			}
