@@ -251,7 +251,7 @@ func (m *Model) overlayInventory(onto string) string {
 	x := (m.width - w) / 2
 	y := (m.height - h) / 2
 
-	text := "\n " + m.textHeader1Style.Render("# File information") + "\n"
+	text := "\n " + m.textHeader1Style.Render("# File information") + "\n\n"
 
 	text += " " + m.boldTextStyle.Render("File name  : ")
 	text += fmt.Sprintf(" %s\n", m.buffer.Name())
@@ -259,7 +259,7 @@ func (m *Model) overlayInventory(onto string) string {
 	text += " " + m.boldTextStyle.Render("Buffer size: ")
 	text += fmt.Sprintf(" %d bytes\n", m.buffer.Size())
 
-	text += "\n " + m.textHeader1Style.Render("# Search patterns") + "\n"
+	text += "\n " + m.textHeader1Style.Render("# Search patterns") + "\n\n"
 	for i := 0; i < len(m.searches); i++ {
 		if m.searches[i].pattern != "" {
 			regex := "plain"
@@ -270,7 +270,7 @@ func (m *Model) overlayInventory(onto string) string {
 		}
 	}
 
-	text += "\n " + m.textHeader1Style.Render("# Show/hide patterns") + "\n"
+	text += "\n " + m.textHeader1Style.Render("# Show/hide patterns") + "\n\n"
 	text += " " + m.boldTextStyle.Render("Show: ")
 	text += m.showPattern + "\n"
 	text += " " + m.boldTextStyle.Render("Hide: ")
