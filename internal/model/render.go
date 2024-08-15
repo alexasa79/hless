@@ -7,8 +7,6 @@ import (
 
 	"github.com/alexasa79/hless/internal/lines"
 	"github.com/alexasa79/hless/internal/utils"
-	"github.com/muesli/ansi"
-	"github.com/muesli/reflow/truncate"
 )
 
 func (m *Model) renderShowBar() string {
@@ -238,53 +236,44 @@ func (m *Model) renderHelp() string {
 	return m.helpViewport.View()
 }
 
-func (m *Model) overlay(what string, onto string, x int, y int) string {
-	res := ""
-
-	whatLines := strings.Split(what, "\n")
-	ontoLines := strings.Split(onto, "\n")
-
-	/* First add everything before y */
-	for i, line := range ontoLines {
-		if i >= y {
-			break
-		}
-		res += line + "\n"
-	}
-
-	/* Now add the onto lines */
-	for i, line := range whatLines {
-		if i+y >= m.height {
-			break
-		}
-
-		ol := ontoLines[i+y]
-		if ansi.PrintableRuneWidth(ol) < x {
-			ol = fmt.Sprintf("%-*s", x, ol)
-		}
-		res += truncate.String(ol, uint(x))
-		res += line
-		if ansi.PrintableRuneWidth(res) < ansi.PrintableRuneWidth(ol) {
-			res += ol[len(res):]
-		}
-
-		res += "\n"
-	}
-
-	return res
-}
-
-func (m *Model) overlayHelp(onto string) string {
+func (m *Model) overlayInventory(onto string) string {
 	w := 80
-	h := int(max(25, float64(m.height)*0.8))
+	h := 25
 	x := (m.width - w) / 2
 	y := (m.height - h) / 2
 
-	m.helpViewport.Width = w
-	m.helpViewport.Height = h
+	text := "\n " + m.textHeader1Style.Render("# File information") + "\n"
 
-	help := m.renderHelp()
-	return PlaceOverlay(x, y, help, onto)
+	text += " " + m.boldTextStyle.Render("File name  : ")
+	text += fmt.Sprintf(" %s\n", m.buffer.Name())
+
+	text += " " + m.boldTextStyle.Render("Buffer size: ")
+	text += fmt.Sprintf(" %d bytes\n", m.buffer.Size())
+
+	text += "\n " + m.textHeader1Style.Render("# Search patterns") + "\n"
+	for i := 0; i < len(m.searches); i++ {
+		if m.searches[i].pattern != "" {
+			regex := "plain"
+			if m.searches[i].regex {
+				regex = "regex"
+			}
+			text += fmt.Sprintf(" %d. (%s) %s\n", i+1, regex, m.searches[i].pattern)
+		}
+	}
+
+	text += "\n " + m.textHeader1Style.Render("# Show/hide patterns") + "\n"
+	text += " " + m.boldTextStyle.Render("Show: ")
+	text += m.showPattern + "\n"
+	text += " " + m.boldTextStyle.Render("Hide: ")
+	text += m.hidePattern + "\n"
+
+	m.inventoryViewport.SetContent(text)
+
+	m.inventoryViewport.Width = w
+	m.inventoryViewport.Height = h
+
+	inventory := m.inventoryViewport.View()
+	return PlaceOverlay(x, y, inventory, onto)
 }
 
 func (m *Model) View() string {
@@ -381,6 +370,8 @@ func (m *Model) View() string {
 
 	if m.helpActive {
 		res = m.overlayHelp(res)
+	} else if m.inventoryActive {
+		res = m.overlayInventory(res)
 	}
 
 	return res

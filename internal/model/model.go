@@ -96,13 +96,16 @@ type Model struct {
 	width  int
 	height int
 
-	defaultStyle lipgloss.Style
-	cursorStyle  lipgloss.Style
-	errorStyle   lipgloss.Style
-	statusStyle  lipgloss.Style
-	promptStyle  lipgloss.Style
-	editorStyle  lipgloss.Style
-	markStyle    [3]lipgloss.Style
+	defaultStyle     lipgloss.Style
+	cursorStyle      lipgloss.Style
+	errorStyle       lipgloss.Style
+	statusStyle      lipgloss.Style
+	promptStyle      lipgloss.Style
+	editorStyle      lipgloss.Style
+	markStyle        [3]lipgloss.Style
+	textHeader1Style lipgloss.Style
+	textHeader2Style lipgloss.Style
+	boldTextStyle    lipgloss.Style
 
 	searchStyles [9]lipgloss.Style
 
@@ -148,7 +151,8 @@ type Model struct {
 	activeHideTextbox bool
 	hidePattern       string
 
-	inventory bool
+	inventoryActive   bool
+	inventoryViewport viewport.Model
 }
 
 var ML *hhlog.Logger
@@ -216,24 +220,19 @@ func InitialModel(b *lines.Buffer) *Model {
 		marks: avltree.NewAVLTree(markLineComp),
 
 		defaultStyle: lipgloss.NewStyle(),
-		cursorStyle: lipgloss.
-			NewStyle().
+		cursorStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#ffda45")).
 			Foreground(lipgloss.Color("#000000")),
-		errorStyle: lipgloss.
-			NewStyle().
+		errorStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#ff0000")).
 			Foreground(lipgloss.Color("#ffffff")),
-		statusStyle: lipgloss.
-			NewStyle().
+		statusStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
 			Foreground(lipgloss.Color("#000000")),
-		editorStyle: lipgloss.
-			NewStyle().
+		editorStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#444444")).
 			Foreground(lipgloss.Color("#ffffff")),
-		promptStyle: lipgloss.
-			NewStyle().
+		promptStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
 			Foreground(lipgloss.Color("#000000")),
 		markStyle: [3]lipgloss.Style{
@@ -241,6 +240,17 @@ func InitialModel(b *lines.Buffer) *Model {
 			lipgloss.NewStyle().Background(lipgloss.Color("#e65100")).Foreground(lipgloss.Color("#ffffff")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#2e7d32")).Foreground(lipgloss.Color("#ffffff")),
 		},
+		textHeader1Style: lipgloss.NewStyle().
+			Background(lipgloss.Color("#0d47a1")).
+			Foreground(lipgloss.Color("#ffffff")).
+			Bold(true),
+		textHeader2Style: lipgloss.NewStyle().
+			Background(lipgloss.Color("#1e88e5")).
+			Foreground(lipgloss.Color("#ffffff")),
+		boldTextStyle: lipgloss.NewStyle().
+			Background(lipgloss.Color("#000000")).
+			Foreground(lipgloss.Color("#ffffff")).
+			Bold(true),
 		searchStyles: [9]lipgloss.Style{
 			lipgloss.NewStyle().Background(lipgloss.Color("#ce93d8")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#b39ddb")).Foreground(lipgloss.Color("#000000")),
@@ -270,6 +280,8 @@ func InitialModel(b *lines.Buffer) *Model {
 			NewStyle().
 			Background(lipgloss.Color("#ff7777")).
 			Foreground(lipgloss.Color("#ffffff")),
+
+		inventoryViewport: viewport.New(0, 0),
 	}
 
 	m.search = 0
@@ -287,6 +299,9 @@ func InitialModel(b *lines.Buffer) *Model {
 
 	m.helpViewport.Style = m.helpViewport.Style.Border(lipgloss.ThickBorder())
 	m.helpViewport.Style = m.helpViewport.Style.BorderForeground(lipgloss.Color("#ffffff"))
+
+	m.inventoryViewport.Style = m.inventoryViewport.Style.Border(lipgloss.ThickBorder())
+	m.inventoryViewport.Style = m.inventoryViewport.Style.BorderForeground(lipgloss.Color("#ffffff"))
 
 	return &m
 }
@@ -1163,7 +1178,10 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 
 func (m *Model) Init() tea.Cmd {
 	m.History.Load()
-	return m.helpViewport.Init()
+	cmds := make([]tea.Cmd, 0)
+	cmds = append(cmds, m.helpViewport.Init())
+	cmds = append(cmds, m.inventoryViewport.Init())
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) BufferRefresher() tea.Msg {

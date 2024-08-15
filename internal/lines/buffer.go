@@ -97,6 +97,18 @@ func (b *Buffer) Size() int64 {
 	return b.fileSize
 }
 
+func (b *Buffer) Name() string {
+	switch b.bufferType {
+	case bufferTypeFile:
+		return b.filename
+	case bufferTypeString:
+		return "string"
+	case bufferTypeStream:
+		return "standard input"
+	}
+	panic("unreachable")
+}
+
 func (b *Buffer) At(i int64) byte {
 	switch b.bufferType {
 	case bufferTypeFile:

@@ -43,6 +43,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.helpViewport, cmd = m.helpViewport.Update(msg)
 			cmds = append(cmds, cmd)
+		} else if m.inventoryActive {
+			if k == "q" {
+				m.inventoryActive = false
+				break
+			}
+
+			m.inventoryViewport, cmd = m.inventoryViewport.Update(msg)
+			cmds = append(cmds, cmd)
 		} else {
 			if m.activeShowTextbox {
 				if k == "esc" || k == "ctrl+c" {
@@ -410,6 +418,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if k == "v" {
 					m.viewCommand = true
 				}
+
+				if k == "i" {
+					m.inventoryActive = true
+				}
 			}
 		}
 
@@ -426,6 +438,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.top.Segment = 0
 
 		m.helpViewport, cmd = m.helpViewport.Update(msg)
+		cmds = append(cmds, cmd)
+
+		m.inventoryViewport, cmd = m.inventoryViewport.Update(msg)
 		cmds = append(cmds, cmd)
 
 	case ProgressReport:
