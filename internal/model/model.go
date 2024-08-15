@@ -147,6 +147,8 @@ type Model struct {
 
 	activeHideTextbox bool
 	hidePattern       string
+
+	inventory bool
 }
 
 var ML *hhlog.Logger
@@ -241,7 +243,7 @@ func InitialModel(b *lines.Buffer) *Model {
 		},
 		searchStyles: [9]lipgloss.Style{
 			lipgloss.NewStyle().Background(lipgloss.Color("#ce93d8")).Foreground(lipgloss.Color("#000000")),
-			lipgloss.NewStyle().Background(lipgloss.Color("#d1c4e9")).Foreground(lipgloss.Color("#000000")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#b39ddb")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#9fa8da")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#bbdefb")).Foreground(lipgloss.Color("#000000")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#81d4fa")).Foreground(lipgloss.Color("#000000")),
@@ -282,6 +284,9 @@ func InitialModel(b *lines.Buffer) *Model {
 		m.searchHits[i] = avltree.NewAVLTree(lines.LineComp)
 		m.searchRanges[i] = avltree.NewAVLTree(searchRangeComp)
 	}
+
+	m.helpViewport.Style = m.helpViewport.Style.Border(lipgloss.ThickBorder())
+	m.helpViewport.Style = m.helpViewport.Style.BorderForeground(lipgloss.Color("#ffffff"))
 
 	return &m
 }

@@ -7,6 +7,8 @@ import (
 
 	"github.com/alexasa79/hless/internal/lines"
 	"github.com/alexasa79/hless/internal/utils"
+	"github.com/muesli/ansi"
+	"github.com/muesli/reflow/truncate"
 )
 
 func (m *Model) renderShowBar() string {
@@ -232,11 +234,60 @@ func (m *Model) renderStatusBar() string {
 	return st1 + "\n" + st2
 }
 
-func (m *Model) View() string {
-	if m.helpActive {
-		return m.helpViewport.View()
+func (m *Model) renderHelp() string {
+	return m.helpViewport.View()
+}
+
+func (m *Model) overlay(what string, onto string, x int, y int) string {
+	res := ""
+
+	whatLines := strings.Split(what, "\n")
+	ontoLines := strings.Split(onto, "\n")
+
+	/* First add everything before y */
+	for i, line := range ontoLines {
+		if i >= y {
+			break
+		}
+		res += line + "\n"
 	}
 
+	/* Now add the onto lines */
+	for i, line := range whatLines {
+		if i+y >= m.height {
+			break
+		}
+
+		ol := ontoLines[i+y]
+		if ansi.PrintableRuneWidth(ol) < x {
+			ol = fmt.Sprintf("%-*s", x, ol)
+		}
+		res += truncate.String(ol, uint(x))
+		res += line
+		if ansi.PrintableRuneWidth(res) < ansi.PrintableRuneWidth(ol) {
+			res += ol[len(res):]
+		}
+
+		res += "\n"
+	}
+
+	return res
+}
+
+func (m *Model) overlayHelp(onto string) string {
+	w := 80
+	h := int(max(25, float64(m.height)*0.8))
+	x := (m.width - w) / 2
+	y := (m.height - h) / 2
+
+	m.helpViewport.Width = w
+	m.helpViewport.Height = h
+
+	help := m.renderHelp()
+	return PlaceOverlay(x, y, help, onto)
+}
+
+func (m *Model) View() string {
 	h := m.height
 	w := m.width
 	res := ""
@@ -327,6 +378,10 @@ func (m *Model) View() string {
 
 	VL.Debug("Rendered: %s, %d lines of text", strings.Trim(desc, " "), renderedLines)
 	VL.Debug("Total rendered %d characters and %d lines", len(res), utils.CountLines(res))
+
+	if m.helpActive {
+		res = m.overlayHelp(res)
+	}
 
 	return res
 }

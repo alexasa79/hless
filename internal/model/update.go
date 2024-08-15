@@ -428,9 +428,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.helpViewport, cmd = m.helpViewport.Update(msg)
 		cmds = append(cmds, cmd)
 
-		m.helpViewport.Width = msg.Width
-		m.helpViewport.Height = msg.Height
-
 	case ProgressReport:
 		if !msg.interrupted {
 			m.currentProgress = msg.progress
