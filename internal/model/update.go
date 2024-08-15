@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/alexasa79/hless/internal/avltree"
-	"github.com/alexasa79/hless/internal/help"
 	"github.com/alexasa79/hless/internal/jumpparser"
 	"github.com/alexasa79/hless/internal/lines"
 	tea "github.com/charmbracelet/bubbletea"
@@ -320,8 +319,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "h" && !viewCommand {
-					ML.Info("Setting help viewport's text to: %s", help.Text)
-					m.helpViewport.SetContent(help.Text)
+					m.helpViewport.SetContent(m.renderHelp())
 					m.helpActive = true
 				}
 

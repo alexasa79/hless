@@ -1,9 +1,10 @@
-package help
+package model
 
-var Text = `
- # Hless - Pager for human beings
+func (m *Model) renderHelp() string {
+	return `
+ ` + m.textHeader1Style.Render("# Hless - Pager for human beings") + `
 
- ## Basic navigation
+ ` + m.textHeader2Style.Render("## Basic navigation") + `
 
  Press 'q' to leave this screen and up and down arrows to navigate. Below is
  the list of supported keyboard shortcuts.
@@ -26,7 +27,7 @@ var Text = `
  i           - Show inventory.
  h           - Show this screen.
 
- ## Search
+ ` + m.textHeader2Style.Render("## Search") + `
 
  Search in hless is different than in vi or less. Hless supports multiple
  search patterns, up to 9. The typical n and N search for the last search
@@ -53,7 +54,7 @@ var Text = `
  A             - Add selected word to the current search pattern with \|\.
                  Will NOT search for the next match.
 
- ## Show and hide portions of the file
+ ` + m.textHeader2Style.Render("## Show and hide portions of the file") + `
 
  Hiding various portions of the file is available through 'v' keyboard
  shortcut. To enter one of the shortcuts below, first press 'v' and then the
@@ -68,3 +69,4 @@ var Text = `
 
 
 `
+}

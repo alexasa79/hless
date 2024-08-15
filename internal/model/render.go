@@ -232,8 +232,17 @@ func (m *Model) renderStatusBar() string {
 	return st1 + "\n" + st2
 }
 
-func (m *Model) renderHelp() string {
-	return m.helpViewport.View()
+func (m *Model) overlayHelp(onto string) string {
+	w := 80
+	h := int(max(25, float64(m.height)*0.8))
+	x := (m.width - w) / 2
+	y := (m.height - h) / 2
+
+	m.helpViewport.Width = w
+	m.helpViewport.Height = h
+
+	help := m.helpViewport.View()
+	return PlaceOverlay(x, y, help, onto)
 }
 
 func (m *Model) overlayInventory(onto string) string {
