@@ -266,7 +266,9 @@ func (m *Model) overlayInventory(onto string) string {
 			if m.searches[i].regex {
 				regex = "regex"
 			}
-			text += fmt.Sprintf(" %d. (%s) %s\n", i+1, regex, m.searches[i].pattern)
+			text += " " + m.boldTextStyle.Render(fmt.Sprintf("%d: ", i+1))
+			text += m.searchStyles[i].Render(
+				fmt.Sprintf("(%s) %s", regex, m.searches[i].pattern)) + "\n"
 		}
 	}
 
