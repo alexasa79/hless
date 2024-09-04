@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 type SearchDirection int
@@ -208,6 +209,8 @@ func markLineComp(a, b *MarkLine) int {
 }
 
 func InitialModel(b *lines.Buffer) *Model {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+
 	m := Model{
 		ready: false,
 
