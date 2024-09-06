@@ -1100,7 +1100,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 	}
 
 	for i := 0; i < len(m.searches); i++ {
-		style := m.searchStyles[i]
+		style := m.searchStyles[i].Copy()
 		if i == m.search {
 			style = style.Bold(true)
 		}
