@@ -312,14 +312,14 @@ func (m *Model) View() string {
 
 		var cegs []Cegment
 		if m.cursorLine == current.Line {
-			cegs = m.cegmentize(current.Line, &m.cursorStyle, m.selectionStart, m.selectionEnd, &m.currentWordStyle)
+			cegs = m.cegmentize(current.Line, &m.cursorStyle, m.selectionStart, m.selectionEnd, &m.currentWordStyle, true)
 		} else {
 			mls := MarkLine{line: current.Line}
 			ml := m.marks.Get(&mls)
 			if ml != nil {
-				cegs = m.cegmentize(current.Line, &m.markStyle[(*ml).style], -1, -1, &m.currentWordStyle)
+				cegs = m.cegmentize(current.Line, &m.markStyle[(*ml).style], -1, -1, &m.currentWordStyle, true)
 			} else {
-				cegs = m.cegmentize(current.Line, &m.defaultStyle, -1, -1, &m.currentWordStyle)
+				cegs = m.cegmentize(current.Line, &m.defaultStyle, -1, -1, &m.currentWordStyle, false)
 			}
 		}
 
