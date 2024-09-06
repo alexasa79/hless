@@ -183,12 +183,10 @@ func (m *Model) renderStatusSearch(cts *time.Time) string {
 
 		if i == m.search {
 			m.searchStyles[i].Bold(true)
-			m.searchStyles[i].Underline(true)
 		}
 
 		res += m.searchStyles[i].Render(text)
 		m.searchStyles[i].Bold(false)
-		m.searchStyles[i].Underline(false)
 
 		res += m.statusStyle.Render(" ")
 	}

@@ -10,4 +10,4 @@
 1. [x] Support more marker colors.
 2. [ ] Select a line and show timestamp relative to that line.
 3. [x] Allow adding more characters or words to the selected word with shift+arrows.
-4. [ ] Show search matches for the current search in bold.
+4. [x] Show search matches for the current search in bold.

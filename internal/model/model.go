@@ -1100,6 +1100,11 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 	}
 
 	for i := 0; i < len(m.searches); i++ {
+		style := m.searchStyles[i]
+		if i == m.search {
+			style = style.Bold(true)
+		}
+
 		if len(m.searches[i].pattern) == 0 {
 			continue
 		}
@@ -1111,7 +1116,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 
 		r1 := make([]utils.Range, 0)
 		for _, match := range matches {
-			r1 = append(r1, CegmentRange{start: match.start, end: match.end, style: &m.searchStyles[i]})
+			r1 = append(r1, CegmentRange{start: match.start, end: match.end, style: &style})
 		}
 
 		r0 = utils.RangesProduct(r0, r1)
