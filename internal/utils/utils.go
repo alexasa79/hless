@@ -80,7 +80,7 @@ func ExtractTimestamp(input string) *time.Time {
 
 	res, err := time.Parse(time.RFC3339Nano, ts)
 	if err != nil {
-		fmt.Println("error:", err)
+		UL.Warning("Error parsing %s: %v", ts, err)
 	}
 
 	return &res

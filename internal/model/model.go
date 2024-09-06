@@ -1188,9 +1188,8 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) BufferRefresher() tea.Msg {
-	for {
-		if m.buffer.Refresh() {
-			return BufferRefreshSignal(1)
-		}
+	if m.buffer.Refresh() {
+		return BufferRefreshSignal(1)
 	}
+	return nil
 }
