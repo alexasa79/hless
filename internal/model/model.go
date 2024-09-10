@@ -310,7 +310,7 @@ func InitialModel(b *lines.Buffer) *Model {
 }
 
 func (m *Model) hasNext(pos Position) bool {
-	segs := m.segmentize(pos.Line)
+	segs := m.segmentize(pos.Line, false)
 	if pos.Segment < len(segs)-1 {
 		return true
 	}
@@ -321,7 +321,7 @@ func (m *Model) hasNext(pos Position) bool {
 }
 
 func (m *Model) next(pos Position) Position {
-	segs := m.segmentize(pos.Line)
+	segs := m.segmentize(pos.Line, false)
 	if pos.Segment < len(segs)-1 {
 		pos.Segment++
 		return pos
@@ -353,7 +353,7 @@ func (m *Model) prev(pos Position) Position {
 	prev := m.lines.Prev(pos.Line)
 	if prev != nil {
 		pos.Line = prev
-		segs := m.segmentize(pos.Line)
+		segs := m.segmentize(pos.Line, false)
 		pos.Segment = len(segs) - 1
 		return pos
 	}
@@ -391,7 +391,7 @@ func (m *Model) onKeyUp() {
 				newTop := m.lines.Prev(m.top.Line)
 				if newTop != nil {
 					m.top.Line = newTop
-					segs := m.segmentize(m.top.Line)
+					segs := m.segmentize(m.top.Line, false)
 					m.top.Segment = len(segs) - 1
 					m.cursorLine = m.top.Line
 				}
@@ -417,7 +417,7 @@ func (m *Model) onKeyDown() {
 		}
 	} else {
 		bottomLine, bottomSegment := m.bottomLine()
-		segs := m.segmentize(bottomLine)
+		segs := m.segmentize(bottomLine, false)
 		if bottomSegment < len(segs)-1 {
 			m.scrollOneSegmentDown()
 		}
@@ -997,7 +997,7 @@ func (m *Model) normalizeView() {
 	bottomLine, _ := m.bottomLine()
 	if m.cursorLine.Offset > bottomLine.Offset {
 		ML.Info("Cursor %v appears to be after bottom line %v", m.cursorLine, bottomLine)
-		pos := Position{m.cursorLine, len(m.segmentize(m.cursorLine)) - 1}
+		pos := Position{m.cursorLine, len(m.segmentize(m.cursorLine, false)) - 1}
 		for h := m.height; m.hasPrev(pos) && h > 1; h-- {
 			pos = m.prev(pos)
 		}
@@ -1007,7 +1007,7 @@ func (m *Model) normalizeView() {
 }
 
 func (m *Model) centerCursor() {
-	segs := m.segmentize(m.cursorLine)
+	segs := m.segmentize(m.cursorLine, false)
 
 	pos := Position{
 		Line:    m.cursorLine,
@@ -1060,7 +1060,7 @@ func (m *Model) prevMark() {
 	}
 }
 
-func (m *Model) segmentize(l *lines.Line) []string {
+func (m *Model) segmentize(l *lines.Line, fill bool) []string {
 	line := m.lines.Text(l)
 	res := make([]string, 0)
 	if line == "" {
@@ -1070,7 +1070,7 @@ func (m *Model) segmentize(l *lines.Line) []string {
 		for line != "" {
 			l := utils.Min(m.width, len(line))
 			seg := line[:l]
-			if len(seg) < m.width {
+			if fill && len(seg) < m.width {
 				seg = fmt.Sprintf("%-*s", m.width, seg)
 			}
 			res = append(res, seg)
@@ -1080,8 +1080,8 @@ func (m *Model) segmentize(l *lines.Line) []string {
 	return res
 }
 
-func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style) []Cegment {
-	segs := m.segmentize(l)
+func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style, fill bool) []Cegment {
+	segs := m.segmentize(l, fill)
 	r0 := make([]utils.Range, 0)
 
 	line := m.lines.Text(l)
