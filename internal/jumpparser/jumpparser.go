@@ -14,6 +14,12 @@ const (
 	TOKEN_PLUS
 	TOKEN_MINUS
 	TOKEN_PERCENT
+
+	TOKEN_MICROSECOND
+	TOKEN_MILLISECOND
+	TOKEN_SECOND
+	TOKEN_MINUTE
+	TOKEN_HOUR
 )
 
 type lexer struct {
@@ -21,6 +27,7 @@ type lexer struct {
 	position     int
 	readPosition int
 	ch           byte
+	nextCh       byte
 }
 
 // token represents a lexical token.
@@ -38,9 +45,10 @@ const (
 )
 
 type JumpLocation struct {
-	Offset *float64
-	Lines  *int64
-	How    RelativeJump
+	Offset       *float64
+	Lines        *int64
+	MicroSeconds *int64
+	How          RelativeJump
 }
 
 var chk = utils.Check
@@ -61,6 +69,12 @@ func (l *lexer) readChar() {
 	}
 	l.position = l.readPosition
 	l.readPosition += 1
+
+	if l.readPosition >= len(l.input) {
+		l.nextCh = 0
+	} else {
+		l.nextCh = l.input[l.readPosition]
+	}
 }
 
 func (l *lexer) skipWhitespace() {
@@ -106,7 +120,19 @@ func (l *lexer) tokenize() []token {
 			} else if l.ch == '-' {
 				tokens = append(tokens, token{Type: TOKEN_MINUS, Value: "-"})
 			} else if l.ch == '%' {
-				tokens = append(tokens, token{Type: TOKEN_PERCENT, Value: "%"})
+				tokens = append(tokens, token{Type: TOKEN_PERCENT, Value: "u"})
+			} else if l.ch == 'u' && l.nextCh == 's' {
+				tokens = append(tokens, token{Type: TOKEN_MICROSECOND, Value: "us"})
+				l.readChar()
+			} else if l.ch == 'm' && l.nextCh == 's' {
+				tokens = append(tokens, token{Type: TOKEN_MILLISECOND, Value: "ms"})
+				l.readChar()
+			} else if l.ch == 's' {
+				tokens = append(tokens, token{Type: TOKEN_SECOND, Value: "s"})
+			} else if l.ch == 'm' {
+				tokens = append(tokens, token{Type: TOKEN_MINUTE, Value: "m"})
+			} else if l.ch == 'h' {
+				tokens = append(tokens, token{Type: TOKEN_HOUR, Value: "h"})
 			} else {
 				val := l.readWord()
 				tokens = append(tokens, token{Type: TOKEN_WORD, Value: val})
@@ -170,6 +196,76 @@ func parse(tokens []token) (JumpLocation, error) {
 					*res.Offset = n
 				}
 				*res.Offset = n
+			} else if i < len(tokens)-1 && tokens[i+1].Type == TOKEN_MICROSECOND {
+				n, err := strconv.Atoi(t.Value)
+				if err != nil {
+					return JumpLocation{}, err
+				}
+				if add {
+					res.How = JUMP_FORWARD
+				} else if sub {
+					res.How = JUMP_BACKWARD
+				} else {
+					return JumpLocation{}, fmt.Errorf("time based jump must be relative")
+				}
+				res.MicroSeconds = new(int64)
+				*res.MicroSeconds = int64(n) * 1000
+			} else if i < len(tokens)-1 && tokens[i+1].Type == TOKEN_MILLISECOND {
+				n, err := strconv.Atoi(t.Value)
+				if err != nil {
+					return JumpLocation{}, err
+				}
+				if add {
+					res.How = JUMP_FORWARD
+				} else if sub {
+					res.How = JUMP_BACKWARD
+				} else {
+					return JumpLocation{}, fmt.Errorf("time based jump must be relative")
+				}
+				res.MicroSeconds = new(int64)
+				*res.MicroSeconds = int64(n) * 1000000
+			} else if i < len(tokens)-1 && tokens[i+1].Type == TOKEN_SECOND {
+				n, err := strconv.Atoi(t.Value)
+				if err != nil {
+					return JumpLocation{}, err
+				}
+				if add {
+					res.How = JUMP_FORWARD
+				} else if sub {
+					res.How = JUMP_BACKWARD
+				} else {
+					return JumpLocation{}, fmt.Errorf("time based jump must be relative")
+				}
+				res.MicroSeconds = new(int64)
+				*res.MicroSeconds = int64(n) * 1000000000
+			} else if i < len(tokens)-1 && tokens[i+1].Type == TOKEN_MINUTE {
+				n, err := strconv.Atoi(t.Value)
+				if err != nil {
+					return JumpLocation{}, err
+				}
+				if add {
+					res.How = JUMP_FORWARD
+				} else if sub {
+					res.How = JUMP_BACKWARD
+				} else {
+					return JumpLocation{}, fmt.Errorf("time based jump must be relative")
+				}
+				res.MicroSeconds = new(int64)
+				*res.MicroSeconds = int64(n) * 1000000000 * 60
+			} else if i < len(tokens)-1 && tokens[i+1].Type == TOKEN_HOUR {
+				n, err := strconv.Atoi(t.Value)
+				if err != nil {
+					return JumpLocation{}, err
+				}
+				if add {
+					res.How = JUMP_FORWARD
+				} else if sub {
+					res.How = JUMP_BACKWARD
+				} else {
+					return JumpLocation{}, fmt.Errorf("time based jump must be relative")
+				}
+				res.MicroSeconds = new(int64)
+				*res.MicroSeconds = int64(n) * 1000000000 * 60 * 60
 			} else {
 				if res.Lines == nil {
 					res.Lines = new(int64)

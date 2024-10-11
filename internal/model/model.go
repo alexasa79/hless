@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/alexasa79/hless/internal/avltree"
 	"github.com/alexasa79/hless/internal/hhlog"
@@ -123,7 +124,8 @@ type Model struct {
 
 	activeGotoTextbox bool
 	gotoLine          int64
-	gotoLineHow       jumpparser.RelativeJump
+	gotoTime          time.Time
+	gotoHow           jumpparser.RelativeJump
 
 	inProgress        bool
 	currentProgress   float64
@@ -932,7 +934,7 @@ func (m *Model) gotoWithProgress() tea.Cmd {
 
 	counter := int64(0)
 	currentLine := m.lines.First()
-	if m.gotoLineHow != jumpparser.JUMP_ABSOLUTE {
+	if m.gotoHow != jumpparser.JUMP_ABSOLUTE {
 		currentLine = m.cursorLine
 	}
 
@@ -954,7 +956,7 @@ func (m *Model) gotoWithProgress() tea.Cmd {
 				SL.Debug("Goto interrupted")
 				break outer
 			default:
-				if m.gotoLineHow == jumpparser.JUMP_BACKWARD {
+				if m.gotoHow == jumpparser.JUMP_BACKWARD {
 					currentLine = m.lines.Prev(currentLine)
 				} else {
 					currentLine = m.lines.Next(currentLine)
@@ -974,6 +976,80 @@ func (m *Model) gotoWithProgress() tea.Cmd {
 		}
 
 		prog = float64(counter) / float64(m.gotoLine)
+
+		res := ProgressReport{
+			progress:    prog,
+			interrupted: interrupted,
+		}
+
+		SL.Debug("Returning progress report %v", res)
+
+		return res
+	}
+}
+
+func (m *Model) gotoTimeWithProgress() tea.Cmd {
+	SL.Info("Going to time %v", m.gotoTime)
+
+	currentLine := m.cursorLine
+
+	return func() tea.Msg {
+		cts := utils.ExtractTimestamp(m.lines.Text(currentLine))
+		if cts != nil {
+			SL.Debug("Current time is %v", *cts)
+		}
+
+		// One of two things can happen. Either we already read to the end of the file.
+		// In this case we set the progress based on the current search line out of total
+		// number of lines. Or we did not yet reach the end of the file. In this case
+		// we set the progress to be the progress returned by populate()
+		batch := int64(10000)
+		var prog float64 = 0
+		interrupted := false
+		finished := false
+
+	outer:
+		for batch > 0 && currentLine != nil {
+			select {
+			case interrupted = <-m.progressInterrupt:
+				SL.Debug("Goto interrupted")
+				break outer
+			default:
+				cts := utils.ExtractTimestamp(m.lines.Text(currentLine))
+				if m.gotoHow == jumpparser.JUMP_BACKWARD {
+					if cts != nil && m.gotoTime.Compare(*cts) >= 0 {
+						finished = true
+						break outer
+					}
+					currentLine = m.lines.Prev(currentLine)
+				} else {
+					if cts != nil && m.gotoTime.Compare(*cts) < 0 {
+						finished = true
+						break outer
+					}
+					currentLine = m.lines.Next(currentLine)
+				}
+				batch--
+			}
+		}
+
+		if finished {
+			interrupted = true
+			m.cursorLine = currentLine
+			m.centerCursor()
+			prog = 1.0
+		} else if currentLine == nil {
+			m.setError("Line not found")
+			interrupted = true
+			prog = 1.0
+		} else {
+			if m.gotoHow == jumpparser.JUMP_BACKWARD {
+				prog = 1.0 - (float64(currentLine.Offset) / float64(m.cursorLine.Offset))
+			} else {
+				prog = (float64(currentLine.Offset)-float64(m.cursorLine.Offset))/
+					float64(m.buffer.Size()) - float64(m.cursorLine.Offset)
+			}
+		}
 
 		res := ProgressReport{
 			progress:    prog,
@@ -1186,8 +1262,24 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 
 	if j.Lines != nil {
 		m.gotoLine = int64(*j.Lines)
-		m.gotoLineHow = j.How
+		m.gotoHow = j.How
 		return m.startProgress("Counting", m.gotoWithProgress())
+	}
+
+	if j.MicroSeconds != nil {
+		cts := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
+		if cts != nil {
+			m.gotoTime = *cts
+			m.gotoHow = j.How
+			if m.gotoHow == jumpparser.JUMP_FORWARD {
+				m.gotoTime = m.gotoTime.Add(time.Duration(*j.MicroSeconds))
+			} else if m.gotoHow == jumpparser.JUMP_BACKWARD {
+				m.gotoTime = m.gotoTime.Add(-time.Duration(*j.MicroSeconds))
+			}
+			return m.startProgress("Counting", m.gotoTimeWithProgress())
+		} else {
+			m.setError("Current line has no readable timestamp")
+		}
 	}
 
 	return nil
