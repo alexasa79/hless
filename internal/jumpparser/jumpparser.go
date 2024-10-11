@@ -29,9 +29,18 @@ type token struct {
 	Value string
 }
 
+type RelativeJump int
+
+const (
+	JUMP_ABSOLUTE = RelativeJump(iota)
+	JUMP_FORWARD
+	JUMP_BACKWARD
+)
+
 type JumpLocation struct {
 	Offset *float64
 	Lines  *int64
+	How    RelativeJump
 }
 
 var chk = utils.Check
@@ -125,6 +134,7 @@ func parse(tokens []token) (JumpLocation, error) {
 	res := JumpLocation{}
 	add := false
 	sub := false
+	res.How = JUMP_ABSOLUTE
 
 	for i, t := range tokens {
 		switch t.Type {
@@ -154,12 +164,12 @@ func parse(tokens []token) (JumpLocation, error) {
 				n, err := strconv.ParseFloat(t.Value, 64)
 				chk(err)
 				if add {
-					*res.Offset += n
+					res.How = JUMP_FORWARD
 				} else if sub {
-					*res.Offset -= n
-				} else {
+					res.How = JUMP_BACKWARD
 					*res.Offset = n
 				}
+				*res.Offset = n
 			} else {
 				if res.Lines == nil {
 					res.Lines = new(int64)
@@ -168,12 +178,11 @@ func parse(tokens []token) (JumpLocation, error) {
 				n, err := strconv.Atoi(t.Value)
 				chk(err)
 				if add {
-					*res.Lines += int64(n)
+					res.How = JUMP_FORWARD
 				} else if sub {
-					*res.Lines -= int64(n)
-				} else {
-					*res.Lines = int64(n)
+					res.How = JUMP_BACKWARD
 				}
+				*res.Lines = int64(n)
 			}
 
 			add = false

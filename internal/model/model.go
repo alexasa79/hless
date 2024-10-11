@@ -123,6 +123,7 @@ type Model struct {
 
 	activeGotoTextbox bool
 	gotoLine          int64
+	gotoLineHow       jumpparser.RelativeJump
 
 	inProgress        bool
 	currentProgress   float64
@@ -929,8 +930,11 @@ func (m *Model) setError(err string) {
 func (m *Model) gotoWithProgress() tea.Cmd {
 	SL.Info("Going to line %v", m.gotoLine)
 
-	counter := int64(1)
+	counter := int64(0)
 	currentLine := m.lines.First()
+	if m.gotoLineHow != jumpparser.JUMP_ABSOLUTE {
+		currentLine = m.cursorLine
+	}
 
 	return func() tea.Msg {
 		SL.Debug("Callback called for %v", counter)
@@ -950,7 +954,11 @@ func (m *Model) gotoWithProgress() tea.Cmd {
 				SL.Debug("Goto interrupted")
 				break outer
 			default:
-				currentLine = m.lines.Next(currentLine)
+				if m.gotoLineHow == jumpparser.JUMP_BACKWARD {
+					currentLine = m.lines.Prev(currentLine)
+				} else {
+					currentLine = m.lines.Next(currentLine)
+				}
 				batch--
 				counter++
 			}
@@ -1178,6 +1186,7 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 
 	if j.Lines != nil {
 		m.gotoLine = int64(*j.Lines)
+		m.gotoLineHow = j.How
 		return m.startProgress("Counting", m.gotoWithProgress())
 	}
 

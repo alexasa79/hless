@@ -62,7 +62,7 @@ func (m *Model) renderSearchBar() string {
 func (m *Model) renderGotoBar() string {
 	res := ""
 
-	text := ""
+	text := "NUM for absolute line number, +NUM or -NUM for relative line number"
 	res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, text))
 
 	m.textbox.Width = m.width
