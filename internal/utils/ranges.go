@@ -1,5 +1,7 @@
 package utils
 
+import "math"
+
 type Range interface {
 	Start() int
 	End() int
@@ -7,84 +9,48 @@ type Range interface {
 }
 
 func Intersect(a, b *Range) bool {
-    return (*a).Start() <= (*b).End() && (*b).Start() <= (*a).End()
+	return (*a).Start() <= (*b).End() && (*b).Start() <= (*a).End()
+}
+
+func addGapRanges(result *[]Range, ranges1 []Range, gapStart, gapEnd int) {
+	for _, r1 := range ranges1 {
+		// Check if the range from ranges1 overlaps with the gap
+		start := max(r1.Start(), gapStart)
+		end := min(r1.End(), gapEnd)
+
+		if start < end {
+			*result = append(*result, r1.Subrange(start, end))
+		}
+	}
 }
 
 func RangesProduct(ranges1 []Range, ranges2 []Range) []Range {
 	res := make([]Range, 0)
 
-	cursor := 0
-	i := 0
-	j := 0
-
-	if len(ranges1) > 0 {
-		cursor = Min(cursor, ranges1[0].Start())
-	}
-
+	// Add ranges from ranges1 that come before the first range in ranges2
 	if len(ranges2) > 0 {
-		cursor = Min(cursor, ranges2[0].Start())
+		firstStart := ranges2[0].Start()
+		addGapRanges(&res, ranges1, math.MinInt, firstStart)
 	}
 
-	for i < len(ranges1) && j < len(ranges2) {
-		r1 := ranges1[i]
-		r2 := ranges2[j]
-
-		start1 := r1.Start()
-		start2 := r2.Start()
-		end1 := r1.End()
-		end2 := r2.End()
-
-		if cursor >= end1 {
-			i++
-			continue
-		}
-
-		if cursor >= end2 {
-			j++
-			continue
-		}
-
-		if cursor >= start1 && cursor < end1 && cursor >= start2 && cursor < end2 {
-			if end1 > end2 {
-				res = append(res, ranges2[j].Subrange(cursor, end2))
-				cursor = end2
-			} else {
-				res = append(res, ranges2[j].Subrange(cursor, end1))
-				cursor = end1
-			}
-		} else if cursor >= start1 && cursor < end1 {
-			end := Min(start2, end1)
-			res = append(res, ranges1[i].Subrange(cursor, end))
-			cursor = end
-		} else if cursor >= start2 && cursor < end2 {
-			end := Min(start1, end2)
-			res = append(res, ranges2[j].Subrange(cursor, end))
-			cursor = end
+	// Iterate through all ranges in ranges2
+	prevEnd := 0
+	for i, r2 := range ranges2 {
+		if i == 0 {
+			res = append(res, r2)
 		} else {
-			cursor = Min(start1, start2)
+			addGapRanges(&res, ranges1, prevEnd, r2.Start())
+			res = append(res, r2)
 		}
+		prevEnd = r2.End()
 	}
 
-	Assert(i == len(ranges1) || j == len(ranges2))
-
-	if i < len(ranges1) {
-		if cursor >= ranges1[i].Start() && cursor < ranges1[i].End() {
-			res = append(res, ranges1[i].Subrange(cursor, ranges1[i].End()))
-			i++
-		}
-		for ; i < len(ranges1); i++ {
-			res = append(res, ranges1[i])
-		}
-	}
-
-	if j < len(ranges2) {
-		if cursor >= ranges2[j].Start() && cursor < ranges2[j].End() {
-			res = append(res, ranges2[j].Subrange(cursor, ranges2[j].End()))
-			j++
-		}
-		for ; j < len(ranges1); j++ {
-			res = append(res, ranges2[j])
-		}
+	// Add remaining ranges from ranges1 that come after the last range in ranges2
+	if len(ranges2) > 0 {
+		lastEnd := ranges2[len(ranges2)-1].End()
+		addGapRanges(&res, ranges1, lastEnd, math.MaxInt)
+	} else {
+		addGapRanges(&res, ranges1, math.MinInt, math.MaxInt)
 	}
 
 	return res
