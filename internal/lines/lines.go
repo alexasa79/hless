@@ -310,6 +310,13 @@ func (lines *Lines) SetHidePattern(pat string) {
 	LL.Debug("Set hide pattern to %s", pat)
 }
 
+func (lines *Lines) Refresh() {
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.data.Refresh()
+}
+
 func (line *Line) Name() string {
 	mx.Lock()
 	defer mx.Unlock()

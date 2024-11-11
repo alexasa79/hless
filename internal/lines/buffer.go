@@ -2,14 +2,16 @@ package lines
 
 import (
 	"os"
+	"sync"
 	"syscall"
-	"time"
 
 	"github.com/alexasa79/hless/internal/utils"
 	"golang.org/x/exp/mmap"
+	"golang.org/x/sys/unix"
 )
 
 type bufferType int
+type BufferRefreshSignal int
 
 const (
 	bufferTypeFile bufferType = iota
@@ -25,6 +27,10 @@ type Buffer struct {
 	m        *mmap.ReaderAt
 	bytes    []byte
 	streamFd int
+
+	mx sync.Mutex
+
+	BufferRefreshChannel chan BufferRefreshSignal
 }
 
 func NewBufferFromFile(filename string) *Buffer {
@@ -42,51 +48,78 @@ func NewBufferFromFile(filename string) *Buffer {
 	}
 
 	return &Buffer{
-		filename:   filename,
-		fileSize:   fileSize,
-		m:          m,
-		bufferType: bufferTypeFile,
+		filename:             filename,
+		fileSize:             fileSize,
+		m:                    m,
+		bufferType:           bufferTypeFile,
+		BufferRefreshChannel: make(chan BufferRefreshSignal, 10000),
 	}
 }
 
 func NewBufferFromString(s string) *Buffer {
 	return &Buffer{
-		fileSize:   int64(len(s)),
-		bufferType: bufferTypeString,
-		bytes:      []byte(s),
+		fileSize:             int64(len(s)),
+		bufferType:           bufferTypeString,
+		bytes:                []byte(s),
+		BufferRefreshChannel: make(chan BufferRefreshSignal, 10000),
 	}
 }
 
-func readSome(fd int) []byte {
-	b := make([]byte, 65536)
-
-	n, err := syscall.Read(fd, b)
-	if err != nil {
-		LL.Warning("%s", err)
-	} else {
-		b = b[:n]
-	}
-
-	LL.Trace("Read %d bytes from the stream", len(b))
-
-	return b
-}
-
-func NewBufferFromStdin() *Buffer {
-	// Create a duplicate of stdin file and file descriptor
-	nfd, err := syscall.Dup(int(os.Stdin.Fd()))
+func NewBufferFromStdin() (*Buffer, *os.File) {
+	savedStdin, err := syscall.Dup(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
 	}
 
-	os.Stdin.Close()
-
-	return &Buffer{
-		fileSize:   int64(0),
-		bufferType: bufferTypeStream,
-		bytes:      make([]byte, 0),
-		streamFd:   nfd,
+	err = syscall.Close(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
 	}
+
+	newStdin, err := os.Open("/dev/tty")
+	if err != nil {
+		panic(err)
+	}
+
+	buf := &Buffer{
+		fileSize:             int64(0),
+		bufferType:           bufferTypeStream,
+		bytes:                make([]byte, 0),
+		streamFd:             savedStdin,
+		BufferRefreshChannel: make(chan BufferRefreshSignal, 10000),
+	}
+
+	go func() {
+		buffer := make([]byte, 1024)
+
+		for {
+			n, err := unix.Read(savedStdin, buffer)
+			if err != nil {
+				LL.Trace("Error %v reading from the buffer", err)
+				if err == unix.EAGAIN {
+					continue
+				} else {
+					break
+				}
+			}
+
+			if n > 0 {
+				LL.Trace("Read %d bytes from the input", n)
+
+				buf.mx.Lock()
+				buf.bytes = append(buf.bytes, buffer[:n]...)
+				buf.mx.Unlock()
+
+				buf.fileSize = int64(len(buf.bytes))
+
+				buf.BufferRefreshChannel <- BufferRefreshSignal(n)
+			} else if n == 0 {
+				break
+			}
+		}
+	}()
+
+	return buf, newStdin
 }
 
 func (b *Buffer) Close() {
@@ -110,6 +143,9 @@ func (b *Buffer) Name() string {
 }
 
 func (b *Buffer) At(i int64) byte {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+
 	switch b.bufferType {
 	case bufferTypeFile:
 		return b.m.At(int(i))
@@ -122,6 +158,9 @@ func (b *Buffer) At(i int64) byte {
 }
 
 func (b *Buffer) Range(start, end int64) []byte {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+
 	switch b.bufferType {
 	case bufferTypeFile:
 		buf := make([]byte, end-start)
@@ -137,6 +176,9 @@ func (b *Buffer) Range(start, end int64) []byte {
 
 func (b *Buffer) Refresh() bool {
 	LL.Trace("Refreshing buffer")
+
+	b.mx.Lock()
+	defer b.mx.Unlock()
 
 	switch b.bufferType {
 	case bufferTypeFile:
@@ -154,23 +196,14 @@ func (b *Buffer) Refresh() bool {
 			b.fileSize = fileSize
 			b.m.Close()
 			b.m = m
+			LL.Trace("New buffer size %d", b.fileSize)
 			return true
-		} else {
-			time.Sleep(100 * time.Millisecond)
 		}
 		return false
 	case bufferTypeString:
 		return false
 	case bufferTypeStream:
-		res := false
-		buf := readSome(b.streamFd)
-		if len(buf) > 0 {
-			LL.Debug("Read another %d bytes. Got %d bytes total", len(buf), len(b.bytes)+len(buf))
-			res = true
-		}
-		b.bytes = append(b.bytes, buf...)
-		b.fileSize = int64(len(b.bytes))
-		return res
+		return false
 	}
 	return false
 }

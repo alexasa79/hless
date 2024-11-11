@@ -57,8 +57,6 @@ type ProgressReport struct {
 	interrupted bool
 }
 
-type BufferRefreshSignal int
-
 func (c CegmentRange) Start() int {
 	return c.start
 }
@@ -85,9 +83,8 @@ type MarkLine struct {
 type Model struct {
 	ready bool
 
-	buffer                  *lines.Buffer
-	lines                   *lines.Lines
-	backgroundReaderStarted bool
+	buffer *lines.Buffer
+	lines  *lines.Lines
 
 	marks *avltree.AVLTree[*MarkLine]
 
@@ -1285,17 +1282,20 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 	return nil
 }
 
+func (m *Model) bufferRefresher() tea.Msg {
+	sig, ok := <-m.buffer.BufferRefreshChannel
+	if ok {
+		return sig
+	} else {
+		return nil
+	}
+}
+
 func (m *Model) Init() tea.Cmd {
 	m.History.Load()
 	cmds := make([]tea.Cmd, 0)
 	cmds = append(cmds, m.helpViewport.Init())
 	cmds = append(cmds, m.inventoryViewport.Init())
+	cmds = append(cmds, m.bufferRefresher)
 	return tea.Batch(cmds...)
-}
-
-func (m *Model) BufferRefresher() tea.Msg {
-	if m.buffer.Refresh() {
-		return BufferRefreshSignal(1)
-	}
-	return nil
 }

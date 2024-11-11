@@ -18,12 +18,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	ML.Info("Got request %v %v", reflect.TypeOf(msg), msg)
 
-	cmds := make([]tea.Cmd, 0)
+	m.lines.Refresh()
 
-	if !m.backgroundReaderStarted {
-		m.backgroundReaderStarted = true
-		cmds = append(cmds, m.BufferRefresher)
-	}
+	cmds := make([]tea.Cmd, 0)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -226,7 +223,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if k == "R" {
-					m.buffer.Refresh()
+					m.lines.Refresh()
 				}
 
 				if k == "pgup" {
@@ -450,16 +447,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.progressInterrupt = nil
 		}
 
-	case BufferRefreshSignal:
-		ML.Debug("Buffer changed. New buffer is %d bytes long", m.buffer.Size())
-
-		if m.ready && m.top.Line == nil {
-			m.top.Line = m.lines.First()
-			m.top.Segment = 0
-			m.cursorLine = m.top.Line
-		}
-
-		cmds = append(cmds, m.BufferRefresher)
+	case lines.BufferRefreshSignal:
+		cmds = append(cmds, m.bufferRefresher)
 	}
 
 	if m.activeError && !m.errorTimeoutScheduled {
@@ -470,6 +459,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeError = false
 			return true
 		}))
+	}
+
+	if m.ready && m.top.Line == nil {
+		m.top.Line = m.lines.First()
+		m.top.Segment = 0
+		m.cursorLine = m.top.Line
+		ML.Trace("Missing top line. Updated to %v", m.top)
 	}
 
 	m.normalizeView()

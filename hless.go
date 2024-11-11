@@ -121,9 +121,10 @@ func main() {
 	}
 
 	var buffer *lines.Buffer
+	var stdin *os.File = os.Stdin
 
 	if len(cfg.InputFiles) != 1 {
-		buffer = lines.NewBufferFromStdin()
+		buffer, stdin = lines.NewBufferFromStdin()
 	} else {
 		in, err := os.Open(cfg.InputFiles[0])
 		if err != nil {
@@ -136,7 +137,7 @@ func main() {
 		defer buffer.Close()
 	}
 
-	p := tea.NewProgram(model.InitialModel(buffer), tea.WithAltScreen(), tea.WithInputTTY())
+	p := tea.NewProgram(model.InitialModel(buffer), tea.WithAltScreen(), tea.WithInput(stdin))
 	defer tea.ExitAltScreen()
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error rendering the TUI: %v", err)
