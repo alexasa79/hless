@@ -109,7 +109,7 @@ func (lines *Lines) readBackward() {
 }
 
 func (lines *Lines) first(iteration int) *Line {
-	utils.Assert(iteration < 100)
+	utils.Assert(iteration < 100000)
 
 	LL.Trace("Asked to return first in the buffer. Iteration %d", iteration)
 
@@ -128,7 +128,7 @@ func (lines *Lines) first(iteration int) *Line {
 }
 
 func (lines *Lines) last(iteration int) *Line {
-	utils.Assert(iteration < 100)
+	utils.Assert(iteration < 100000)
 
 	LL.Trace("Asked to return last in the buffer. Iteration %d", iteration)
 
@@ -152,7 +152,7 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 
 	// This is a mere protection against bugs. We should be able to iterate as many times as we
 	// need.
-	utils.Assert(iterations < 100)
+	utils.Assert(iterations < 100000)
 
 	if line.Offset+int64(line.RawLength) >= lines.data.Size() {
 		return nil
@@ -180,9 +180,7 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 func (lines *Lines) prev(line *Line, iterations int) *Line {
 	// This is a mere protection against bugs. We should be able to iterate as many times as we
 	// need.
-	if iterations > 100 {
-		return nil
-	}
+	utils.Assert(iterations < 100000)
 
 	if line.Offset == 0 {
 		return nil
