@@ -65,6 +65,48 @@ func NewBufferFromString(s string) *Buffer {
 	}
 }
 
+func readFile(buf *Buffer, fd int, bufferSize int) {
+	buffer := make([]byte, bufferSize)
+
+	for {
+		n, err := unix.Read(fd, buffer)
+		if err != nil {
+			LL.Trace("Error %v reading from the buffer", err)
+			if err == unix.EAGAIN {
+				continue
+			} else {
+				break
+			}
+		}
+
+		if n > 0 {
+			LL.Trace("Read %d bytes from the input", n)
+
+			buf.mx.Lock()
+			buf.bytes = append(buf.bytes, buffer[:n]...)
+			buf.mx.Unlock()
+
+			buf.fileSize = int64(len(buf.bytes))
+
+			buf.BufferRefreshChannel <- BufferRefreshSignal(n)
+		} else if n == 0 {
+			break
+		}
+	}
+}
+
+func NewBufferFromFileDescriptors(fd int, bufferSize int) *Buffer {
+	buf := &Buffer{
+		fileSize:             int64(0),
+		bufferType:           bufferTypeStream,
+		bytes:                make([]byte, 0),
+		streamFd:             fd,
+		BufferRefreshChannel: make(chan BufferRefreshSignal, 10000),
+	}
+	go readFile(buf, fd, bufferSize)
+	return buf
+}
+
 func NewBufferFromStdin() (*Buffer, *os.File) {
 	savedStdin, err := syscall.Dup(int(os.Stdin.Fd()))
 	if err != nil {
@@ -89,35 +131,7 @@ func NewBufferFromStdin() (*Buffer, *os.File) {
 		BufferRefreshChannel: make(chan BufferRefreshSignal, 10000),
 	}
 
-	go func() {
-		buffer := make([]byte, 1024)
-
-		for {
-			n, err := unix.Read(savedStdin, buffer)
-			if err != nil {
-				LL.Trace("Error %v reading from the buffer", err)
-				if err == unix.EAGAIN {
-					continue
-				} else {
-					break
-				}
-			}
-
-			if n > 0 {
-				LL.Trace("Read %d bytes from the input", n)
-
-				buf.mx.Lock()
-				buf.bytes = append(buf.bytes, buffer[:n]...)
-				buf.mx.Unlock()
-
-				buf.fileSize = int64(len(buf.bytes))
-
-				buf.BufferRefreshChannel <- BufferRefreshSignal(n)
-			} else if n == 0 {
-				break
-			}
-		}
-	}()
+	go readFile(buf, savedStdin, 65536)
 
 	return buf, newStdin
 }
@@ -127,6 +141,9 @@ func (b *Buffer) Close() {
 }
 
 func (b *Buffer) Size() int64 {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+
 	return b.fileSize
 }
 
@@ -145,6 +162,8 @@ func (b *Buffer) Name() string {
 func (b *Buffer) At(i int64) byte {
 	b.mx.Lock()
 	defer b.mx.Unlock()
+
+	utils.Assert(i >= 0, i)
 
 	switch b.bufferType {
 	case bufferTypeFile:

@@ -1,6 +1,8 @@
 package lines
 
 import (
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/alexasa79/hless/internal/utils"
@@ -241,7 +243,7 @@ func TestAt1(t *testing.T) {
 	s := "01\n345\n678\n"
 	lines := NewLines(NewBufferFromString(s))
 
-	l := lines.At(4, "at 4")
+	l := lines.At(4)
 	utils.Assert(l != nil)
 	utils.Assert(lines.Text(l) == "345")
 	utils.Assert(l.Offset == 3)
@@ -256,4 +258,56 @@ func TestAt1(t *testing.T) {
 	utils.Assert(lines.Text(l3) == "01")
 	utils.Assert(l3 != nil)
 	utils.Assert(l3.Name() == "at 4-1")
+}
+
+func TestInputStream(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
+
+	line := lines.Last()
+	utils.Assert(line == nil)
+
+	w.Write([]byte("hello world\n"))
+	<-lines.data.BufferRefreshChannel
+
+	line = lines.Last()
+	utils.Assert(line != nil)
+	first := lines.First()
+	utils.Assert(line == first)
+
+	w.Write([]byte("12345"))
+	<-lines.data.BufferRefreshChannel
+	utils.Assert(lines.First() != lines.Last())
+	w.Write([]byte("6789\n"))
+	<-lines.data.BufferRefreshChannel
+	utils.Assert(lines.Text(lines.Last()) == "123456789")
+
+	w.Write([]byte("hello world\n"))
+	<-lines.data.BufferRefreshChannel
+	last := lines.Last()
+	utils.Assert(line != last)
+}
+
+func TestInputStreamSections(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
+
+	// Write 12 bytes
+	w.Write([]byte("hello world\n"))
+	<-lines.data.BufferRefreshChannel
+
+	// Write another 100 bytes in 20 lines
+	for i := 0; i < 10; i++ {
+		s := fmt.Sprintf("%.2d1234567\n", i)
+		w.Write([]byte(s))
+	}
+	<-lines.data.BufferRefreshChannel
+
+	lines.JumpTo(150, "150")
+
+	line := lines.Last()
+	for i := 0; i < 12; i++ {
+		utils.Assert(line != nil)
+		line = lines.Prev(line)
+	}
 }

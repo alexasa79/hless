@@ -13,6 +13,7 @@ func (lines *Lines) readForward() {
 		s, s.read.end, lines.data.Size())
 
 	if s.read.end >= lines.data.Size() {
+		LL.Trace("Section past end of data %v %d", s, lines.data.Size())
 		return
 	}
 
@@ -21,7 +22,8 @@ func (lines *Lines) readForward() {
 	lineStart := s.read.end
 	pos := s.read.end
 	for pos < lines.data.Size() {
-		if lines.data.At(pos) == '\n' {
+		c := lines.data.At(pos)
+		if c == '\n' {
 			len := pos - lineStart
 			line := Line{
 				Offset:    lineStart,
@@ -39,6 +41,7 @@ func (lines *Lines) readForward() {
 
 			pos++
 			lineStart = pos
+			s.read.end = pos
 
 			batchSize--
 			if batchSize == 0 {
@@ -48,7 +51,32 @@ func (lines *Lines) readForward() {
 			pos++
 		}
 	}
-	s.read.end = pos
+
+	if pos == lines.data.Size() {
+		s.read.end = pos
+		if pos != lineStart {
+			len := pos - lineStart
+			rawLength := pos - lineStart
+			if lines.data.At(pos-1) == '\n' {
+				rawLength--
+			}
+			line := Line{
+				Offset:    lineStart,
+				Length:    len,
+				index:     s.nextIndexForward,
+				RawLength: rawLength,
+				section:   lines.currentSection,
+			}
+
+			lines.lines.Insert(&line)
+			LL.Trace("Inserted line %v", line)
+
+			s.lines++
+			s.nextIndexForward++
+		}
+	}
+
+	LL.Trace("Section after reading forward %v", s)
 }
 
 func (lines *Lines) readBackward() {
@@ -56,14 +84,21 @@ func (lines *Lines) readBackward() {
 	LL.Debug("Reading backwards in section %v", s)
 
 	if s.read.start == 0 {
+		LL.Trace("Section at the beginning of the buffer %v", s)
 		return
 	}
 
 	// s.read.start points at the first character in the last line found string.
 	// Decrementing pos by 1 will get us to point at the \n. Decrementing once again will
 	// get us to look at the last character in the line we're reading.
-	pos := s.read.start - 2
-	for pos >= 0 {
+	pos := s.read.start - 1
+	if lines.data.At(pos) == '\n' {
+		pos--
+	}
+
+	batchSize := 256
+
+	for pos > 0 {
 		if lines.data.At(pos) == '\n' {
 			len := s.read.start - pos - 2
 			line := Line{
@@ -74,19 +109,23 @@ func (lines *Lines) readBackward() {
 				section:   lines.currentSection,
 			}
 
-			LL.Trace("Inserted line %v", line)
 			lines.lines.Insert(&line)
+			LL.Trace("Inserted line %v", line)
 
 			s.lines++
 			s.nextIndexBackward--
+			s.read.start = pos + 1
 
-			break
+			batchSize--
+			if batchSize == 0 {
+				break
+			}
 		}
 		pos--
 	}
 
-	if pos < 0 {
-		len := s.read.start - 1
+	if pos == 0 {
+		len := s.read.start
 		if lines.data.At(len-1) == '\r' {
 			len--
 		}
@@ -100,16 +139,19 @@ func (lines *Lines) readBackward() {
 		}
 
 		lines.lines.Insert(&line)
+		LL.Trace("Inserted line %v", line)
 
 		s.lines++
 		s.nextIndexBackward--
 	}
 
-	s.read.start = pos + 1
+	s.read.start = pos
+
+	LL.Trace("Section after reading backward %v", s)
 }
 
 func (lines *Lines) first(iteration int) *Line {
-	utils.Assert(iteration < 100000)
+	utils.Assert(iteration < 25)
 
 	LL.Trace("Asked to return first in the buffer. Iteration %d", iteration)
 
@@ -128,11 +170,16 @@ func (lines *Lines) first(iteration int) *Line {
 }
 
 func (lines *Lines) last(iteration int) *Line {
-	utils.Assert(iteration < 100000)
+	utils.Assert(iteration < 25)
 
 	LL.Trace("Asked to return last in the buffer. Iteration %d", iteration)
 
 	size := lines.data.Size()
+	if size == 0 {
+		LL.Trace("The buffer is empty. Returning nil")
+		return nil
+	}
+
 	lines.jumpTo(size, fmt.Sprintf("@%d", size))
 	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
 	if t != nil {
@@ -148,13 +195,17 @@ func (lines *Lines) last(iteration int) *Line {
 }
 
 func (lines *Lines) next(line *Line, iterations int) *Line {
-	LL.Trace("Asked to return next of %v. Data size %d. Iteration %d", line, lines.data.Size(), iterations)
+	LL.Trace("Asked to return the next of %v. Data size %d. Iteration %d", line, lines.data.Size(), iterations)
 
 	// This is a mere protection against bugs. We should be able to iterate as many times as we
 	// need.
-	utils.Assert(iterations < 100000)
+	if iterations >= 25 {
+		LL.Trace("Returning nil")
+		return nil
+	}
 
 	if line.Offset+int64(line.RawLength) >= lines.data.Size() {
+		LL.Trace("Returning nil")
 		return nil
 	}
 
@@ -169,8 +220,11 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 		return lines.next(line, iterations+1)
 	} else {
 		if line.Offset+int64(line.RawLength) == int64(next.Offset) {
+			LL.Trace("Returning %v", next)
 			return next
 		} else {
+			LL.Trace("Looks like there is a gap between the current line %v and the potential next %v. Trying again",
+				line, next)
 			lines.readForward()
 			return lines.next(line, iterations+1)
 		}
@@ -178,11 +232,17 @@ func (lines *Lines) next(line *Line, iterations int) *Line {
 }
 
 func (lines *Lines) prev(line *Line, iterations int) *Line {
+	LL.Trace("Asked to return the previous of %v. Data size %d. Iteration %d", line, lines.data.Size(), iterations)
+
 	// This is a mere protection against bugs. We should be able to iterate as many times as we
 	// need.
-	utils.Assert(iterations < 100000)
+	if iterations >= 25 {
+		LL.Trace("Returning nil")
+		return nil
+	}
 
 	if line.Offset == 0 {
+		LL.Trace("Returning nil")
 		return nil
 	}
 
@@ -197,8 +257,10 @@ func (lines *Lines) prev(line *Line, iterations int) *Line {
 		return lines.prev(line, iterations+1)
 	} else {
 		if prev.Offset+int64(prev.RawLength) == int64(line.Offset) {
+			LL.Trace("Returning %v", prev)
 			return prev
 		} else {
+			LL.Trace("Found predecessor, but there is a gap: %v", prev)
 			lines.readBackward()
 			return lines.prev(line, iterations+1)
 		}
