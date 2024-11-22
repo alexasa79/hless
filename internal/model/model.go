@@ -664,6 +664,14 @@ func (m *Model) onToggleMark() {
 	}
 }
 
+func (m *Model) onClearMark() {
+	ML.Info("Clearing mark at position %v", m.cursorLine)
+	ml := m.marks.Get(&MarkLine{line: m.cursorLine})
+	if ml != nil {
+		m.marks.Remove(*ml)
+	}
+}
+
 func (m *Model) searchMatches(line string, pat string, regex bool) []SearchResult {
 	res := make([]SearchResult, 0)
 

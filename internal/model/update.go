@@ -246,6 +246,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.onToggleMark()
 				}
 
+				if k == "M" {
+					m.onClearMark()
+				}
+
 				if k == "." {
 					m.nextMark()
 				}
