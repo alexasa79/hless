@@ -83,7 +83,7 @@ func NewLines(data *Buffer) *Lines {
 		lines:          avltree.NewAVLTree[*Line](LineComp),
 		currentSection: newSection(0, ""),
 		view:           NewView(),
-		batchSize:      256,
+		batchSize:      128,
 	}
 
 	lines.sections.Insert(lines.currentSection)
@@ -93,14 +93,14 @@ func NewLines(data *Buffer) *Lines {
 	return lines
 }
 
-func (line Line) String() string {
-	return fmt.Sprintf("[Line: @%d, index=%d, sec=%p]",
-		line.Offset, line.index, line.section)
+func (line *Line) String() string {
+	return fmt.Sprintf("[Line @%p: @%d, index=%d, sec=%p]",
+		line, line.Offset, line.index, line.section)
 }
 
-func (s Section) String() string {
-	return fmt.Sprintf("[Section: name=%s, lines=%d, read=%d,%d index=%d,%d]",
-		s.name, s.lines, s.read.start, s.read.end, s.nextIndexForward, s.nextIndexBackward)
+func (s *Section) String() string {
+	return fmt.Sprintf("[Section @%p: name=%s, lines=%d, read=%d,%d index=%d,%d]",
+		s, s.name, s.lines, s.read.start, s.read.end, s.nextIndexForward, s.nextIndexBackward)
 }
 
 func (lines *Lines) First() *Line {

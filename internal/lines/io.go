@@ -26,33 +26,33 @@ func (lines *Lines) readForward() {
 				section: lines.currentSection,
 			}
 
+			insert := true
 			if first {
 				predPtr := lines.lines.Predecessor(&line)
 				if predPtr != nil {
 					pred := *predPtr
 					rawL := lines.RawLength(pred)
 					if pred.Offset+rawL > lineStart {
-						LL.Trace("Merging lines %v and %v", line, pred)
-						line = *pred
-						s.lines--
-						s.nextIndexBackward--
-						batchSize++
+						LL.Trace("Line %v already exists. Skipping", pred)
+						insert = false
 					}
 				}
 				first = false
 			}
 
-			lines.lines.Insert(&line)
-			LL.Trace("Inserted line %v", line)
+			if insert {
+				lines.lines.Insert(&line)
+				LL.Trace("Inserted line %v", &line)
 
-			s.lines++
-			s.nextIndexForward++
+				s.lines++
+				s.nextIndexForward++
+				batchSize--
+			}
 
 			pos++
 			lineStart = pos
 			s.read.end = pos
 
-			batchSize--
 		}
 		pos++
 	}
@@ -88,7 +88,7 @@ func (lines *Lines) readBackward() {
 			}
 
 			lines.lines.Insert(&line)
-			LL.Trace("Inserted line %v", line)
+			LL.Trace("Inserted line %v", &line)
 
 			s.lines++
 			s.nextIndexBackward--
