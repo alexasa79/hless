@@ -10,7 +10,7 @@ import (
 	"github.com/alexasa79/hless/internal/hhlog"
 )
 
-var LL *hhlog.Logger
+var LL *hhlog.Logger = hhlog.NewLogger("LINES")
 var mx sync.Mutex
 
 func SectionComp(a, b *Section) int {
@@ -40,11 +40,9 @@ type Section struct {
 }
 
 type Line struct {
-	Offset    int64
-	Length    int64 // length of text
-	RawLength int64 // raw length, with end of line
-	index     int64 // index in section
-	section   *Section
+	Offset  int64
+	index   int64 // index in section
+	section *Section
 }
 
 type Lines struct {
@@ -53,6 +51,8 @@ type Lines struct {
 	lines          *avltree.AVLTree[*Line]
 	sections       *avltree.AVLTree[*Section]
 	currentSection *Section
+
+	batchSize int
 
 	view *View
 }
@@ -83,6 +83,7 @@ func NewLines(data *Buffer) *Lines {
 		lines:          avltree.NewAVLTree[*Line](LineComp),
 		currentSection: newSection(0, ""),
 		view:           NewView(),
+		batchSize:      256,
 	}
 
 	lines.sections.Insert(lines.currentSection)
@@ -93,8 +94,8 @@ func NewLines(data *Buffer) *Lines {
 }
 
 func (line Line) String() string {
-	return fmt.Sprintf("[Line: @%d, len=%d, rlen=%d, index=%d, sec=%p]",
-		line.Offset, line.Length, line.RawLength, line.index, line.section)
+	return fmt.Sprintf("[Line: @%d, index=%d, sec=%p]",
+		line.Offset, line.index, line.section)
 }
 
 func (s Section) String() string {
@@ -110,9 +111,9 @@ func (lines *Lines) First() *Line {
 		return lines.at(lines.view.forcedStart)
 	}
 
-	res := lines.first(0)
+	res := lines.first()
 	for res != nil && !lines.visible(res) {
-		res = lines.next(res, 0)
+		res = lines.next(res)
 	}
 
 	return res
@@ -141,7 +142,7 @@ func (lines *Lines) SetLast(line *Line) {
 	}
 
 	lines.view.Reset()
-	lines.view.SetLast(line)
+	lines.view.SetLast(line, lines.RawLength(line))
 
 	LL.Debug("Set last line to %v", line)
 }
@@ -154,9 +155,9 @@ func (lines *Lines) Last() *Line {
 		return lines.at(lines.view.forcedEnd)
 	}
 
-	res := lines.last(0)
+	res := lines.last()
 	for res != nil && !lines.visible(res) {
-		res = lines.prev(res, 0)
+		res = lines.prev(res)
 	}
 
 	return res
@@ -170,18 +171,16 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		return nil
 	}
 
-	if line.Offset+line.RawLength >= lines.view.forcedEnd {
+	if line.Offset+lines.RawLength(line) >= lines.view.forcedEnd {
 		return nil
 	}
 
-	lines.view.NoteLine(line)
-
-	next = lines.next(line, 0)
+	next = lines.next(line)
 	for next != nil {
 		if lines.visible(next) {
 			break
 		} else {
-			next = lines.next(next, 0)
+			next = lines.next(next)
 		}
 	}
 
@@ -200,12 +199,12 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		return nil
 	}
 
-	prev = lines.prev(line, 0)
+	prev = lines.prev(line)
 	for prev != nil {
 		if lines.visible(prev) {
 			break
 		} else {
-			prev = lines.prev(prev, 0)
+			prev = lines.prev(prev)
 		}
 	}
 
@@ -234,13 +233,13 @@ func (lines *Lines) At(offset int64) *Line {
 		if lines.visible(prev) {
 			return prev
 		} else {
-			prev = lines.prev(prev, 0)
+			prev = lines.prev(prev)
 		}
 
 		if lines.visible(next) {
 			return next
 		} else {
-			next = lines.next(next, 0)
+			next = lines.next(next)
 		}
 	}
 
@@ -249,11 +248,11 @@ func (lines *Lines) At(offset int64) *Line {
 
 func (lines *Lines) visible(line *Line) bool {
 	show := true
-	if lines.view.showPattern != nil && !lines.view.showPattern.MatchString(lines.text(line)) {
+	if lines.view.showPattern != nil && !lines.view.showPattern.MatchString(lines.Text(line)) {
 		show = false
 	}
 
-	if lines.view.hidePattern != nil && lines.view.hidePattern.MatchString(lines.text(line)) {
+	if lines.view.hidePattern != nil && lines.view.hidePattern.MatchString(lines.Text(line)) {
 		show = false
 	}
 
@@ -279,7 +278,41 @@ func (lines *Lines) Text(line *Line) string {
 		return ""
 	}
 
-	return lines.text(line)
+	res := ""
+	size := lines.data.Size()
+	for pos := line.Offset; pos < size; pos++ {
+		c := lines.data.At(pos)
+		if c == '\n' {
+			break
+		}
+		res += string(c)
+	}
+	return res
+}
+
+func (lines *Lines) Length(line *Line) int64 {
+	res := int64(0)
+	size := lines.data.Size()
+	for line.Offset+res < size {
+		if lines.data.At(line.Offset+res) == '\n' {
+			break
+		}
+		res++
+	}
+	return res
+}
+
+func (lines *Lines) RawLength(line *Line) int64 {
+	res := int64(0)
+	size := lines.data.Size()
+	for line.Offset+res < size {
+		if lines.data.At(line.Offset+res) == '\n' {
+			res += 1
+			break
+		}
+		res++
+	}
+	return res
 }
 
 func (lines *Lines) SetShowPattern(pat string) {
@@ -315,6 +348,7 @@ func (lines *Lines) Refresh() {
 	defer mx.Unlock()
 
 	lines.data.Refresh()
+	lines.readForward()
 }
 
 func (line *Line) Name() string {

@@ -84,11 +84,9 @@ func readFile(buf *Buffer, fd int, bufferSize int) {
 
 			buf.mx.Lock()
 			buf.bytes = append(buf.bytes, buffer[:n]...)
-			buf.mx.Unlock()
-
 			buf.fileSize = int64(len(buf.bytes))
-
 			buf.BufferRefreshChannel <- BufferRefreshSignal(n)
+			buf.mx.Unlock()
 		} else if n == 0 {
 			break
 		}

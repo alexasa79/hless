@@ -156,9 +156,9 @@ type Model struct {
 	inventoryViewport viewport.Model
 }
 
-var ML *hhlog.Logger
-var SL *hhlog.Logger
-var VL *hhlog.Logger
+var ML *hhlog.Logger = hhlog.NewLogger("MODEL")
+var SL *hhlog.Logger = hhlog.NewLogger("SEARCH")
+var VL *hhlog.Logger = hhlog.NewLogger("VIEW")
 
 var searchForwardRunes = map[string]int{
 	"1": 0,
@@ -1256,7 +1256,7 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 			where := int64(float64(m.buffer.Size()) * *j.Offset / 100)
 			first := m.lines.First()
 			last := m.lines.Last()
-			if where >= first.Offset && where < last.Offset+last.RawLength {
+			if where >= first.Offset && where < last.Offset+m.lines.RawLength(last) {
 				m.cursorLine = m.lines.At(where)
 				m.centerCursor()
 			} else {

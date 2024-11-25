@@ -48,7 +48,9 @@ func Assert(cond bool, args ...interface{}) {
 		for _, arg := range args {
 			meta += fmt.Sprintf("%+v\n", arg)
 		}
-		panic(fmt.Sprintf("Assertion violation at %s:%d, meta=\n%s", file, line, meta))
+		text := fmt.Sprintf("Assertion violation at %s:%d, meta=\n%s", file, line, meta)
+		UL.Warning(text)
+		panic(text)
 	}
 }
 

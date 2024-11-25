@@ -38,8 +38,8 @@ func (view *View) SetFirst(line *Line) {
 	view.forcedStart = line.Offset
 }
 
-func (view *View) SetLast(line *Line) {
-	view.forcedEnd = line.Offset + line.RawLength
+func (view *View) SetLast(line *Line, rawLength int64) {
+	view.forcedEnd = line.Offset + rawLength
 }
 
 func (view *View) NoteLine(line *Line) {

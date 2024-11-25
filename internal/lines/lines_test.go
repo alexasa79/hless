@@ -1,313 +1,209 @@
 package lines
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
+	"github.com/alexasa79/hless/internal/hhlog"
 	"github.com/alexasa79/hless/internal/utils"
 )
 
-func TestTrivial(t *testing.T) {
-	s := "hello\nworlds\n"
-	lines := NewLines(NewBufferFromString(s))
-	lines.readForward()
-
-	search := &Line{Offset: 0}
-	l := lines.lines.Get(search)
-	utils.Assert(l != nil)
-	utils.Assert(lines.Text(*l) == "hello")
-	utils.Assert((*l).RawLength == 6)
-	utils.Assert((*l).Offset == 0)
-	utils.Assert((*l).Name() == "1")
-	first := l
-
-	search = &Line{Offset: 6}
-	l = lines.lines.Get(search)
-	utils.Assert(l == nil)
-
-	lines.readForward()
-	l = lines.lines.Get(search)
-	utils.Assert(l != nil)
-	ttt := lines.Text(*l)
-	utils.Assert(ttt != "")
-	utils.Assert(lines.Text(*l) == "worlds")
-	utils.Assert((*l).RawLength == 7)
-	utils.Assert((*l).Offset == 6)
-	utils.Assert((*l).Name() == "2")
-
-	utils.Assert(lines.Next(*first) == *l)
-	utils.Assert(lines.Next(*l) == nil)
-}
-
-func TestCR(t *testing.T) {
-	s := "hello\r\nworlds\r\n"
-	lines := NewLines(NewBufferFromString(s))
-	lines.readForward()
-
-	search := &Line{Offset: 0}
-	l := lines.lines.Get(search)
-	utils.Assert(l != nil)
-	utils.Assert(lines.Text(*l) == "hello")
-	utils.Assert((*l).RawLength == 7)
-	utils.Assert((*l).Offset == 0)
-	utils.Assert((*l).Name() == "1")
-	first := l
-
-	lines.readForward()
-	search = &Line{Offset: 7}
-	l = lines.lines.Get(search)
-	utils.Assert(l != nil)
-	utils.Assert(lines.Text(*l) == "worlds")
-	utils.Assert((*l).RawLength == 8)
-	utils.Assert((*l).Offset == 7)
-	utils.Assert((*l).Name() == "2")
-
-	utils.Assert(lines.Next(*first) == *l)
-	utils.Assert(lines.Next(*l) == nil)
-}
-
-func TestMixedEOL(t *testing.T) {
-	s := "hello\nworlds\r\nfoo\n"
-	lines := NewLines(NewBufferFromString(s))
-
-	lines.readForward()
-	search := &Line{Offset: 0}
-	l := lines.lines.Get(search)
-	utils.Assert(l != nil)
-	utils.Assert((*l).Offset == int64(0))
-	utils.Assert(lines.Text(*l) == "hello")
-	utils.Assert((*l).RawLength == 6)
-	utils.Assert((*l).Name() == "1")
-
-	lines.readForward()
-	l2 := lines.Next(*l)
-	utils.Assert(l2 != nil)
-	utils.Assert(lines.Text(l2) == "worlds")
-	utils.Assert(l2.Name() == "2")
-	utils.Assert(l2.Offset == int64(6))
-	utils.Assert(l2.RawLength == 8)
-
-	lines.readForward()
-	l2 = lines.Next(l2)
-	utils.Assert(l2 != nil)
-	utils.Assert(lines.Text(l2) == "foo")
-	utils.Assert(l2.Name() == "3")
-	utils.Assert(l2.Offset == int64(14))
-	utils.Assert(l2.RawLength == 4)
-}
-
-func TestReadBackward(t *testing.T) {
-	s := "01\n345\n"
-	utils.Assert(len(s) == 7)
-	lines := NewLines(NewBufferFromString(s))
-	lines.JumpTo(7, "end")
-
-	lines.readBackward()
-	utils.Assert(lines.lines.Count() == 1)
-
-	search := &Line{Offset: 3}
-	l := lines.lines.Get(search)
-	utils.Assert(l != nil)
-	ll := *l
-	utils.Assert(ll.Offset == 3)
-	utils.Assert(ll.RawLength == 4)
-	utils.Assert(ll.Length == 3)
-	utils.Assert(ll.index == -1)
-	utils.Assert(lines.Text(ll) == "345")
-	utils.Assert(ll.Name() == "end-1")
-
-	lines.readBackward()
-	utils.Assert(lines.lines.Count() == 2)
-	l2 := lines.Next(*l)
-	utils.Assert(l2 == nil)
-
-	l2 = lines.Prev(*l)
-	utils.Assert(l2 != nil)
-	utils.Assert(lines.Text(l2) == "01")
-	utils.Assert(l2.Name() == "end-2")
-	utils.Assert(l2.Offset == 0)
-	utils.Assert(l2.Length == 2)
-	utils.Assert(l2.RawLength == 3)
-}
-
-func TestReadBackward2(t *testing.T) {
-	s := "01\r\n456\r\n"
-	utils.Assert(len(s) == 9)
-	lines := NewLines(NewBufferFromString(s))
-	lines.JumpTo(9, "end")
-
-	lines.readBackward()
-	utils.Assert(lines.lines.Count() == 1)
-
-	search := &Line{Offset: 4}
-	l := lines.lines.Get(search)
-	utils.Assert(l != nil)
-	ll := *l
-	utils.Assert(ll.Offset == 4)
-	utils.Assert(ll.RawLength == 5)
-	utils.Assert(ll.Length == 3)
-	utils.Assert(ll.index == -1)
-	utils.Assert(lines.Text(ll) == "456")
-	utils.Assert(ll.Name() == "end-1")
-
-	lines.readBackward()
-	utils.Assert(lines.lines.Count() == 2)
-	l2 := lines.Next(*l)
-	utils.Assert(l2 == nil)
-
-	l2 = lines.Prev(*l)
-	utils.Assert(l2 != nil)
-	utils.Assert(lines.Text(l2) == "01")
-	utils.Assert(l2.Name() == "end-2")
-	utils.Assert(l2.Offset == 0)
-	utils.Assert(l2.Length == 2)
-	utils.Assert(l2.RawLength == 4)
-}
-
-func TestBackAndForth(t *testing.T) {
-	s := "012\n34\n"
-	utils.Assert(len(s) == 7)
-	lines := NewLines(NewBufferFromString(s))
-
-	lines.readForward()
-	utils.Assert(lines.lines.Count() == 1)
-
-	lines.JumpTo(7, "end")
-	lines.readBackward()
-	utils.Assert(lines.lines.Count() == 2)
-	l2 := lines.Last()
-	utils.Assert(l2.Offset == 4)
-	utils.Assert(l2.Name() == "end-1")
-
-	l1 := lines.Prev(l2)
-	utils.Assert(l1 != nil)
-}
-
-func TestBackAndForth2(t *testing.T) {
-	s := "01\n23\n34\n"
-	utils.Assert(len(s) == 9)
-	lines := NewLines(NewBufferFromString(s))
-
-	lines.readForward()
-	utils.Assert(lines.lines.Count() == 1)
-
-	lines.JumpTo(9, "end")
-	lines.readBackward()
-	utils.Assert(lines.lines.Count() == 2)
-	lines.readBackward()
-	utils.Assert(lines.lines.Count() == 3)
-
-	l3 := lines.Last()
-	utils.Assert(l3.Offset == 6)
-	utils.Assert(l3.Name() == "end-1")
-	l2 := lines.Prev(l3)
-	utils.Assert(l2.Offset == 3)
-	utils.Assert(l2.Name() == "end-2")
-	l1 := lines.Prev(l2)
-	utils.Assert(l1.Offset == 0)
-	utils.Assert(l1.Name() == "1")
-}
-
-func TestJumpTo(t *testing.T) {
-	s := "01\n345\n"
-	utils.Assert(len(s) == 7)
-	lines := NewLines(NewBufferFromString(s))
-	// lines.batchSize = 2
-	lines.JumpTo(0, "")
-
-	utils.Assert(lines.sections.Count() == 1)
-}
-
-func TestJumpTo2(t *testing.T) {
-	s := "01\n345\n"
-	utils.Assert(len(s) == 7)
-	lines := NewLines(NewBufferFromString(s))
-	// lines.batchSize = 2
-	lines.JumpTo(0, "")
-
-	lines.readForward()
-
-	lines.JumpTo(7, "end")
-	lines.readBackward()
-
-	utils.Assert(lines.sections.Count() == 2)
-
-	lines.JumpTo(7, "end")
-	lines.readBackward()
-
-	utils.Assert(lines.sections.Count() == 2)
-}
-
-func TestAt1(t *testing.T) {
-	s := "01\n345\n678\n"
-	lines := NewLines(NewBufferFromString(s))
-
-	l := lines.At(4)
-	utils.Assert(l != nil)
-	utils.Assert(lines.Text(l) == "345")
-	utils.Assert(l.Offset == 3)
-	utils.Assert(l.Name() == "at 4")
-
-	l2 := lines.Next(l)
-	utils.Assert(lines.Text(l2) == "678")
-	utils.Assert(l2 != nil)
-	utils.Assert(l2.Name() == "at 4+1")
-
-	l3 := lines.Prev(l)
-	utils.Assert(lines.Text(l3) == "01")
-	utils.Assert(l3 != nil)
-	utils.Assert(l3.Name() == "at 4-1")
-}
-
-func TestInputStream(t *testing.T) {
-	r, w, _ := os.Pipe()
-	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
-
-	line := lines.Last()
-	utils.Assert(line == nil)
-
-	w.Write([]byte("hello world\n"))
-	<-lines.data.BufferRefreshChannel
-
-	line = lines.Last()
+func checkLine(lines *Lines, line *Line, offset int64, length int64, rawLength int64) {
 	utils.Assert(line != nil)
-	first := lines.First()
-	utils.Assert(line == first)
-
-	w.Write([]byte("12345"))
-	<-lines.data.BufferRefreshChannel
-	utils.Assert(lines.First() != lines.Last())
-	w.Write([]byte("6789\n"))
-	<-lines.data.BufferRefreshChannel
-	utils.Assert(lines.Text(lines.Last()) == "123456789")
-
-	w.Write([]byte("hello world\n"))
-	<-lines.data.BufferRefreshChannel
-	last := lines.Last()
-	utils.Assert(line != last)
+	utils.Assert(line.Offset == offset)
+	utils.Assert(lines.Length(line) == length)
+	utils.Assert(lines.RawLength(line) == rawLength)
 }
 
-func TestInputStreamSections(t *testing.T) {
+func TestMain(m *testing.M) {
+	hhlog.SetupLogging("../../logs/lines-test.log")
+	defer hhlog.CleanupLogging()
+
+	for _, logger := range hhlog.AllLoggers {
+		logger.MinLevel = hhlog.TRACE
+	}
+
+	m.Run()
+}
+
+func Test1(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
+	lines.batchSize = 1
 
 	// Write 12 bytes
-	w.Write([]byte("hello world\n"))
+	w.Write([]byte("123456789\n"))
 	<-lines.data.BufferRefreshChannel
 
-	// Write another 100 bytes in 20 lines
-	for i := 0; i < 10; i++ {
-		s := fmt.Sprintf("%.2d1234567\n", i)
-		w.Write([]byte(s))
-	}
+	first := lines.First()
+	utils.Assert(first != nil)
+	utils.Assert(lines.Length(first) == 9)
+	utils.Assert(lines.RawLength(first) == 10)
+
+	utils.Assert(lines.Next(first) == nil)
+}
+
+func Test2(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
+	lines.batchSize = 1
+
+	// Write 12 bytes
+	w.Write([]byte("123456789\n123456789\n"))
 	<-lines.data.BufferRefreshChannel
 
-	lines.JumpTo(150, "150")
+	lines.readForward()
+	utils.Assert(lines.currentSection.lines == 1)
 
-	line := lines.Last()
-	for i := 0; i < 12; i++ {
-		utils.Assert(line != nil)
-		line = lines.Prev(line)
-	}
+	lines.readForward()
+	utils.Assert(lines.currentSection.lines == 2)
+
+	first := lines.First()
+	utils.Assert(first != nil)
+	utils.Assert(first.Offset == 0)
+	utils.Assert(lines.Length(first) == 9)
+	utils.Assert(lines.RawLength(first) == 10)
+
+	second := lines.Next(first)
+	utils.Assert(second != nil)
+	utils.Assert(second.Offset == 10)
+	utils.Assert(lines.Length(second) == 9)
+	utils.Assert(lines.RawLength(second) == 10)
+
+	utils.Assert(lines.Next(second) == nil)
+}
+
+func Test3(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
+	lines.batchSize = 1
+
+	// Write 12 bytes
+	w.Write([]byte("123456789\n123456789\n123456789\n"))
+	<-lines.data.BufferRefreshChannel
+
+	first := lines.First()
+	utils.Assert(first != nil)
+	utils.Assert(first.Offset == 0)
+
+	lines.readForward()
+	lines.jumpTo(15, "@15")
+
+	second := lines.Next(first)
+	utils.Assert(second != nil)
+	utils.Assert(second.Offset == 10)
+
+	third := lines.Next(second)
+	utils.Assert(third != nil)
+	utils.Assert(third.Offset == 20)
+}
+
+func Test4(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
+	lines.batchSize = 1
+
+	// Write 12 bytes
+	w.Write([]byte("123456789\n12345"))
+	<-lines.data.BufferRefreshChannel
+
+	first := lines.First()
+	utils.Assert(first != nil)
+	utils.Assert(first.Offset == 0)
+
+	second := lines.Next(first)
+	utils.Assert(second != nil)
+	utils.Assert(second.Offset == 10)
+	utils.Assert(lines.Length(second) == 5)
+	utils.Assert(lines.RawLength(second) == 5)
+
+	w.Write([]byte("6789\n123456789\n"))
+	<-lines.data.BufferRefreshChannel
+
+	secondSecond := lines.Next(first)
+	utils.Assert(second == secondSecond)
+	utils.Assert(second.Offset == 10)
+	utils.Assert(lines.Length(second) == 9)
+	utils.Assert(lines.RawLength(second) == 10)
+
+	third := lines.Next(second)
+	checkLine(lines, third, 20, 9, 10)
+}
+
+func Test5(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
+	lines.batchSize = 1
+
+	// Write 12 bytes
+	w.Write([]byte("12345"))
+	<-lines.data.BufferRefreshChannel
+
+	first := lines.First()
+	checkLine(lines, first, 0, 5, 5)
+
+	w.Write([]byte("6789\n12345"))
+	<-lines.data.BufferRefreshChannel
+
+	first = lines.First()
+	checkLine(lines, first, 0, 9, 10)
+
+	second := lines.Next(first)
+	checkLine(lines, second, 10, 5, 5)
+}
+
+func Test6(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
+	lines.batchSize = 1
+
+	// Write 12 bytes
+	w.Write([]byte("123456789\n123456789\n12345"))
+	<-lines.data.BufferRefreshChannel
+
+	first := lines.First()
+	checkLine(lines, first, 0, 9, 10)
+
+	last := lines.Last()
+	checkLine(lines, last, 20, 5, 5)
+
+	utils.Assert(lines.sections.Count() == 2)
+
+	w.Write([]byte("6789\n123456789\n"))
+	<-lines.data.BufferRefreshChannel
+
+	lastLast := lines.Last()
+	utils.Assert(lastLast != last)
+	checkLine(lines, lastLast, 30, 9, 10)
+
+	third := lines.Prev(lastLast)
+	checkLine(lines, third, 20, 9, 10)
+
+	utils.Assert(lines.sections.Count() == 3)
+
+	second := lines.Prev(third)
+	checkLine(lines, second, 10, 9, 10)
+}
+
+func Test7(t *testing.T) {
+	r, w, _ := os.Pipe()
+	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
+	lines.batchSize = 1
+
+	// Write 12 bytes
+	w.Write([]byte("123456789\n123456789\n12345"))
+	<-lines.data.BufferRefreshChannel
+
+	first := lines.First()
+	checkLine(lines, first, 0, 9, 10)
+
+	last := lines.Last()
+	checkLine(lines, last, 20, 5, 5)
+
+	second := lines.Prev(last)
+	checkLine(lines, second, 10, 9, 10)
+
+	firstFirst := lines.Prev(second)
+	utils.Assert(firstFirst == first)
+	checkLine(lines, firstFirst, 0, 9, 10)
 }

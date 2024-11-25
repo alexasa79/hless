@@ -41,11 +41,6 @@ Options:
 
 var version string = "hless version 0.0.1"
 
-var VL *hhlog.Logger
-var SL *hhlog.Logger
-var ML *hhlog.Logger
-var LL *hhlog.Logger
-
 func main() {
 	cfg := &config{
 		Help:       false,
@@ -80,28 +75,24 @@ func main() {
 
 	if cfg.Debug != "" || cfg.Trace != "" {
 		hhlog.SetupLogging("hless.log")
-		ML = hhlog.NewLogger("MODEL")
-		VL = hhlog.NewLogger("VIEW")
-		SL = hhlog.NewLogger("SEARCH")
-		LL = hhlog.NewLogger("LINES")
 		defer hhlog.CleanupLogging()
 
 		setLevels := func(s string, newLevel hhlog.LogLevel) {
 			for _, level := range strings.Split(s, ",") {
 				switch level {
 				case "model":
-					ML.MinLevel = newLevel
+					model.ML.MinLevel = newLevel
 				case "view":
-					VL.MinLevel = newLevel
+					model.VL.MinLevel = newLevel
 				case "search":
-					SL.MinLevel = newLevel
+					model.SL.MinLevel = newLevel
 				case "lines":
-					LL.MinLevel = newLevel
+					lines.LL.MinLevel = newLevel
 				case "all":
-					ML.MinLevel = newLevel
-					VL.MinLevel = newLevel
-					SL.MinLevel = newLevel
-					LL.MinLevel = newLevel
+					model.ML.MinLevel = newLevel
+					model.VL.MinLevel = newLevel
+					model.SL.MinLevel = newLevel
+					lines.LL.MinLevel = newLevel
 				}
 			}
 		}
@@ -109,15 +100,10 @@ func main() {
 		setLevels(cfg.Debug, hhlog.DEBUG)
 		setLevels(cfg.Trace, hhlog.TRACE)
 
-		ML.Info("Logging at level %v", SL.MinLevel)
-		VL.Info("Logging at level %v", VL.MinLevel)
-		SL.Info("Logging at level %v", SL.MinLevel)
-		LL.Info("Logging at level %v", LL.MinLevel)
-
-		lines.LL = LL
-		model.ML = ML
-		model.SL = SL
-		model.VL = VL
+		model.ML.Info("Logging at level %v", model.ML.MinLevel)
+		model.VL.Info("Logging at level %v", model.VL.MinLevel)
+		model.SL.Info("Logging at level %v", model.SL.MinLevel)
+		lines.LL.Info("Logging at level %v", lines.LL.MinLevel)
 	}
 
 	var buffer *lines.Buffer
