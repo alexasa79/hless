@@ -249,7 +249,9 @@ func (m *Model) overlayInventory(onto string) string {
 	x := (m.width - w) / 2
 	y := (m.height - h) / 2
 
-	text := "\n " + m.textHeader1Style.Render("# File information") + "\n\n"
+	text := " Build " + m.buildTime + " " + m.gitrev + "\n"
+
+	text += "\n " + m.textHeader1Style.Render("# File information") + "\n\n"
 
 	text += " " + m.boldTextStyle.Render("File name  : ")
 	text += fmt.Sprintf(" %s\n", m.buffer.Name())

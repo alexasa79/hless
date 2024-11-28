@@ -81,6 +81,9 @@ type MarkLine struct {
 }
 
 type Model struct {
+	gitrev    string
+	buildTime string
+
 	ready bool
 
 	buffer *lines.Buffer
@@ -208,10 +211,13 @@ func markLineComp(a, b *MarkLine) int {
 	}
 }
 
-func InitialModel(b *lines.Buffer) *Model {
+func InitialModel(b *lines.Buffer, gitrev string, buildTime string) *Model {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
 	m := Model{
+		gitrev:    gitrev,
+		buildTime: buildTime,
+
 		ready: false,
 
 		buffer: b,
