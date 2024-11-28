@@ -40,7 +40,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.helpViewport, cmd = m.helpViewport.Update(msg)
 			cmds = append(cmds, cmd)
 		} else if m.inventoryActive {
-			if k == "q" {
+			if k == "q" || k == "esc" {
 				m.inventoryActive = false
 				break
 			}
