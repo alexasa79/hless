@@ -26,13 +26,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		k := msg.String()
 
-		if m.helpActive && k == "q" {
+		if m.helpActive && (k == "q" || k == "esc") {
 			m.helpActive = false
 			break
 		}
 
 		if m.helpActive {
-			if k == "q" {
+			if k == "q" || k == "esc" {
 				m.helpActive = false
 				break
 			}
