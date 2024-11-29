@@ -248,11 +248,11 @@ func (lines *Lines) At(offset int64) *Line {
 
 func (lines *Lines) visible(line *Line) bool {
 	show := true
-	if lines.view.showPattern != nil && !lines.view.showPattern.MatchString(lines.Text(line)) {
+	if lines.view.showPattern != nil && !lines.view.showPattern.MatchString(lines.text(line)) {
 		show = false
 	}
 
-	if lines.view.hidePattern != nil && lines.view.hidePattern.MatchString(lines.Text(line)) {
+	if lines.view.hidePattern != nil && lines.view.hidePattern.MatchString(lines.text(line)) {
 		show = false
 	}
 
@@ -270,10 +270,7 @@ func (lines *Lines) Visible(line *Line) bool {
 	return lines.visible(line)
 }
 
-func (lines *Lines) Text(line *Line) string {
-	mx.Lock()
-	defer mx.Unlock()
-
+func (lines *Lines) text(line *Line) string {
 	if line == nil {
 		return ""
 	}
@@ -288,6 +285,13 @@ func (lines *Lines) Text(line *Line) string {
 		res += string(c)
 	}
 	return res
+}
+
+func (lines *Lines) Text(line *Line) string {
+	mx.Lock()
+	defer mx.Unlock()
+
+	return lines.text(line)
 }
 
 func (lines *Lines) Length(line *Line) int64 {
