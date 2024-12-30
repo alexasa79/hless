@@ -249,6 +249,8 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 
 	if k == "g" {
 		m.cursorLine = m.lines.First()
+		m.top.Line = m.cursorLine
+		m.top.Segment = 0
 	}
 
 	if k == "G" {
