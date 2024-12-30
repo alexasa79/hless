@@ -8,6 +8,7 @@ import (
 
 	"github.com/alexasa79/hless/internal/avltree"
 	"github.com/alexasa79/hless/internal/hhlog"
+	"github.com/alexasa79/hless/internal/utils"
 )
 
 var LL *hhlog.Logger = hhlog.NewLogger("LINES")
@@ -46,7 +47,8 @@ type Line struct {
 }
 
 type Lines struct {
-	data *Buffer
+	data     *Buffer
+	fileSize int64
 
 	lines          *avltree.AVLTree[*Line]
 	sections       *avltree.AVLTree[*Section]
@@ -108,12 +110,23 @@ func (lines *Lines) First() *Line {
 	defer mx.Unlock()
 
 	if lines.view.forcedStart != 0 {
-		return lines.at(lines.view.forcedStart)
+		res := lines.at(lines.view.forcedStart)
+		return res
 	}
 
-	res := lines.first()
+	res := lines.view.GetFirst()
+	if res != nil {
+		utils.Assert(lines.visible(res), res)
+		return res
+	}
+
+	res = lines.first()
 	for res != nil && !lines.visible(res) {
 		res = lines.next(res)
+	}
+
+	if lines.visible(res) {
+		lines.view.NoteFirst(res)
 	}
 
 	return res
@@ -127,8 +140,8 @@ func (lines *Lines) SetFirst(line *Line) {
 		return
 	}
 
-	lines.view.Reset()
-	lines.view.SetFirst(line)
+	utils.Assert(lines.visible(line), line)
+	lines.view.NoteFirst(line)
 
 	LL.Debug("Set first line to %v", line)
 }
@@ -141,8 +154,8 @@ func (lines *Lines) SetLast(line *Line) {
 		return
 	}
 
-	lines.view.Reset()
-	lines.view.SetLast(line, lines.RawLength(line))
+	utils.Assert(lines.visible(line), line)
+	lines.view.NoteLast(line)
 
 	LL.Debug("Set last line to %v", line)
 }
@@ -152,14 +165,28 @@ func (lines *Lines) Last() *Line {
 	defer mx.Unlock()
 
 	if lines.view.forcedEnd != math.MaxInt64 {
-		return lines.at(lines.view.forcedEnd)
+		res := lines.at(lines.view.forcedEnd)
+		LL.Debug("Asked to return last line. Returning %+v", res)
+		return res
 	}
 
-	res := lines.last()
+	res := lines.view.GetLast()
+	if res != nil {
+		utils.Assert(lines.visible(res), res)
+		LL.Debug("Asked to return last line. Returning %+v", res)
+		return res
+	}
+
+	res = lines.last()
 	for res != nil && !lines.visible(res) {
 		res = lines.prev(res)
 	}
 
+	if lines.visible(res) {
+		lines.view.NoteLast(res)
+	}
+
+	LL.Debug("Asked to return last line. Returning %+v", res)
 	return res
 }
 
@@ -175,6 +202,12 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		return nil
 	}
 
+	next = lines.view.NextOf(line)
+	if next != nil {
+		utils.Assert(lines.visible(next), next)
+		return next
+	}
+
 	next = lines.next(line)
 	for next != nil {
 		if lines.visible(next) {
@@ -182,6 +215,10 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		} else {
 			next = lines.next(next)
 		}
+	}
+
+	if lines.visible(line) && lines.visible(next) {
+		lines.view.NoteSuccessor(line, next)
 	}
 
 	return next
@@ -199,6 +236,12 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		return nil
 	}
 
+	prev = lines.view.PrevOf(line)
+	if prev != nil {
+		utils.Assert(lines.visible(prev))
+		return prev
+	}
+
 	prev = lines.prev(line)
 	for prev != nil {
 		if lines.visible(prev) {
@@ -206,6 +249,10 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		} else {
 			prev = lines.prev(prev)
 		}
+	}
+
+	if lines.visible(line) && lines.visible(prev) {
+		lines.view.NotePredecessor(line, prev)
 	}
 
 	return prev
@@ -319,6 +366,10 @@ func (lines *Lines) RawLength(line *Line) int64 {
 	return res
 }
 
+func (lines *Lines) ResetView() {
+	lines.view.Reset()
+}
+
 func (lines *Lines) SetShowPattern(pat string) {
 	mx.Lock()
 	defer mx.Unlock()
@@ -329,8 +380,8 @@ func (lines *Lines) SetShowPattern(pat string) {
 		lines.view.showPattern = nil
 	}
 
-	lines.view.Reset()
 	LL.Debug("Set show pattern to %s", pat)
+	lines.ResetView()
 }
 
 func (lines *Lines) SetHidePattern(pat string) {
@@ -343,8 +394,8 @@ func (lines *Lines) SetHidePattern(pat string) {
 		lines.view.hidePattern = nil
 	}
 
-	lines.view.Reset()
 	LL.Debug("Set hide pattern to %s", pat)
+	lines.ResetView()
 }
 
 func (lines *Lines) Refresh() {
@@ -352,7 +403,10 @@ func (lines *Lines) Refresh() {
 	defer mx.Unlock()
 
 	lines.data.Refresh()
-	lines.readForward()
+	if lines.data.fileSize != lines.fileSize {
+		lines.readForward()
+		lines.fileSize = lines.data.fileSize
+	}
 }
 
 func (line *Line) Name() string {

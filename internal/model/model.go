@@ -598,15 +598,18 @@ func (m *Model) hideBeforeCursor() {
 	m.top.Line = m.cursorLine
 	m.top.Segment = 0
 	m.lines.SetFirst(m.top.Line)
+	m.lines.ResetView()
 }
 
 func (m *Model) hideAfterCursor() {
 	m.lines.SetLast(m.cursorLine)
+	m.lines.ResetView()
 }
 
 func (m *Model) hideReset() {
 	m.lines.SetFirst(nil)
 	m.lines.SetLast(nil)
+	m.lines.ResetView()
 }
 
 func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
@@ -1119,22 +1122,26 @@ func (m *Model) centerCursor() {
 func (m *Model) fixCursor() {
 	pred := m.cursorLine
 	succ := m.lines.Next(m.cursorLine)
-	for pred != nil && succ != nil {
-		if m.lines.Visible(pred) {
-			m.cursorLine = pred
-			break
+	for pred != nil || succ != nil {
+		if pred != nil {
+			if m.lines.Visible(pred) {
+				m.cursorLine = pred
+				break
+			}
+			pred = m.lines.Prev(pred)
 		}
 
-		if m.lines.Visible(succ) {
-			m.cursorLine = succ
-			break
+		if succ != nil {
+			if m.lines.Visible(succ) {
+				m.cursorLine = succ
+				break
+			}
+			succ = m.lines.Next(succ)
 		}
-
-		pred = m.lines.Prev(pred)
-		succ = m.lines.Next(succ)
 	}
 
 	m.centerCursor()
+	VL.Trace("Cursor after fixing is at %v", m.cursorLine)
 }
 
 func (m *Model) nextMark() {

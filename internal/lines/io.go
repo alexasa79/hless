@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/alexasa79/hless/internal/hhlog"
 	"github.com/alexasa79/hless/internal/utils"
 )
 
+var LIO *hhlog.Logger = hhlog.NewLogger("IO")
+
 func (lines *Lines) readForward() {
 	s := lines.currentSection
-	LL.Debug("Reading forwards in section %v from offset %d, size %d",
+	LIO.Debug("Reading forwards in section %v from offset %d, size %d",
 		s, s.read.end, lines.data.Size())
 
 	lineStart := s.read.end
@@ -33,7 +36,7 @@ func (lines *Lines) readForward() {
 					pred := *predPtr
 					rawL := lines.RawLength(pred)
 					if pred.Offset+rawL > lineStart {
-						LL.Trace("Line %v already exists. Skipping", pred)
+						LIO.Trace("Line %v already exists. Skipping", pred)
 						insert = false
 					}
 				}
@@ -42,7 +45,7 @@ func (lines *Lines) readForward() {
 
 			if insert {
 				lines.lines.Insert(&line)
-				LL.Trace("Inserted line %v", &line)
+				LIO.Trace("Inserted line %v", &line)
 
 				s.lines++
 				s.nextIndexForward++
@@ -57,15 +60,15 @@ func (lines *Lines) readForward() {
 		pos++
 	}
 
-	LL.Debug("Section after read %v, size %d", s, lines.data.Size())
+	LIO.Debug("Section after read %v, size %d", s, lines.data.Size())
 }
 
 func (lines *Lines) readBackward() {
 	s := lines.currentSection
-	LL.Debug("Reading backwards in section %v", s)
+	LIO.Debug("Reading backwards in section %v", s)
 
 	if s.read.start == 0 {
-		LL.Trace("Section at the beginning of the buffer %v", s)
+		LIO.Trace("Section at the beginning of the buffer %v", s)
 		return
 	}
 
@@ -88,7 +91,7 @@ func (lines *Lines) readBackward() {
 			}
 
 			lines.lines.Insert(&line)
-			LL.Trace("Inserted line %v", &line)
+			LIO.Trace("Inserted line %v", &line)
 
 			s.lines++
 			s.nextIndexBackward--
@@ -100,11 +103,11 @@ func (lines *Lines) readBackward() {
 	}
 	s.read.start = pos
 
-	LL.Trace("Section after reading backward %v", s)
+	LIO.Trace("Section after reading backward %v", s)
 }
 
 func (lines *Lines) first() *Line {
-	LL.Trace("Asked to return first in the buffer")
+	LIO.Trace("Asked to return first in the buffer")
 
 	if lines.data.fileSize == 0 {
 		return nil
@@ -113,41 +116,41 @@ func (lines *Lines) first() *Line {
 	lines.jumpTo(0, "")
 	t := lines.lines.Get(&Line{Offset: 0})
 	if t != nil {
-		LL.Trace("Returning %v", *t)
+		LIO.Trace("Returning %v", *t)
 		return *t
 	}
 
 	lines.readForward()
 	t = lines.lines.Get(&Line{Offset: 0})
 	if t != nil {
-		LL.Trace("Returning %v", *t)
+		LIO.Trace("Returning %v", *t)
 		return *t
 	}
 
-	LL.Trace("Returning nil")
+	LIO.Trace("Returning nil")
 	return nil
 }
 
 func (lines *Lines) last() *Line {
 	size := lines.data.Size()
 
-	LL.Trace("Asked to return last in the buffer. Size %d", size)
+	LIO.Trace("Asked to return last in the buffer. Size %d", size)
 
 	if size == 0 {
-		LL.Trace("The buffer is empty. Returning nil")
+		LIO.Trace("The buffer is empty. Returning nil")
 		return nil
 	}
 
 	lines.jumpTo(size, fmt.Sprintf("@%d", size))
 	t := lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
 	if t != nil {
-		LL.Trace("Predecessor of infinity is %v", *t)
+		LIO.Trace("Predecessor of infinity is %v", *t)
 	}
 
 	if t != nil {
 		rawL := lines.RawLength(*t)
 		if (*t).Offset+rawL >= size-1 {
-			LL.Trace("Returning %v", *t)
+			LIO.Trace("Returning %v", *t)
 			return *t
 		}
 	}
@@ -155,16 +158,16 @@ func (lines *Lines) last() *Line {
 	lines.readBackward()
 	t = lines.lines.Predecessor(&Line{Offset: math.MaxInt64})
 	if t != nil {
-		LL.Trace("Returning %v", *t)
+		LIO.Trace("Returning %v", *t)
 		return *t
 	}
 
-	LL.Trace("Retruning nil")
+	LIO.Trace("Retruning nil")
 	return nil
 }
 
 func (lines *Lines) next(line *Line) *Line {
-	LL.Trace("Asked to return the next of %v. Data size %d", line, lines.data.Size())
+	LIO.Trace("Asked to return the next of %v. Data size %d", line, lines.data.Size())
 
 	lines.currentSection = line.section
 
@@ -178,34 +181,37 @@ func (lines *Lines) next(line *Line) *Line {
 		if next.section != line.section {
 			rawL := lines.RawLength(line)
 			if line.Offset+rawL == next.Offset {
-				LL.Trace("Returning %v", next)
+				LIO.Trace("Returning %v", next)
 				return next
 			}
 		} else {
-			LL.Trace("Returning %v", next)
+			LIO.Trace("Returning %v", next)
 			return next
 		}
 	}
 
-	lines.readForward()
 	t = lines.lines.Successor(line)
+	if t == nil || line.Offset+lines.RawLength(line) < (*t).Offset {
+		lines.readForward()
+		t = lines.lines.Successor(line)
+	}
 
 	if t != nil {
-		LL.Trace("Returning %v", *t)
+		LIO.Trace("Returning %v", *t)
 		return *t
 	}
 
-	LL.Trace("Returning nil")
+	LIO.Trace("Returning nil")
 	return nil
 }
 
 func (lines *Lines) prev(line *Line) *Line {
-	LL.Trace("Asked to return the previous of %v. Data size %d", line, lines.data.Size())
+	LIO.Trace("Asked to return the previous of %v. Data size %d", line, lines.data.Size())
 
 	lines.currentSection = line.section
 
 	if line.Offset == 0 {
-		LL.Trace("Returning nil")
+		LIO.Trace("Returning nil")
 		return nil
 	}
 
@@ -219,23 +225,27 @@ func (lines *Lines) prev(line *Line) *Line {
 		if prev.section != line.section {
 			rawL := lines.RawLength(prev)
 			if prev.Offset+rawL == line.Offset {
-				LL.Trace("Returning %v", prev)
+				LIO.Trace("Returning %v", prev)
 				return prev
 			}
 		} else {
-			LL.Trace("Returning %v", prev)
+			LIO.Trace("Returning %v", prev)
 			return prev
 		}
 	}
 
-	lines.readBackward()
 	t = lines.lines.Predecessor(line)
+	if t == nil || (*t).Offset+lines.RawLength(*t) < line.Offset {
+		lines.readBackward()
+		t = lines.lines.Predecessor(line)
+	}
+
 	if t != nil {
-		LL.Trace("Returning %v", *t)
+		LIO.Trace("Returning %v", *t)
 		return *t
 	}
 
-	LL.Trace("Returning nil")
+	LIO.Trace("Returning nil")
 	return nil
 }
 
@@ -244,7 +254,7 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 	t := lines.sections.Get(&s)
 	if t != nil {
 		lines.currentSection = *t
-		LL.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
+		LIO.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
 		return
 	}
 
@@ -253,11 +263,11 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 		pred := *t
 		if offset >= pred.read.start && offset < pred.read.end {
 			lines.currentSection = pred
-			LL.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
+			LIO.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
 			return
 		} else if offset == pred.read.end {
 			lines.currentSection = pred
-			LL.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
+			LIO.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
 			return
 		}
 	}
@@ -267,7 +277,7 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 	lines.currentSection = section
 	lines.sections.Insert(section)
 
-	LL.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
+	LIO.Trace("Current section after jumping to %d (%s) is %v", offset, name, lines.currentSection)
 }
 
 func (lines *Lines) at(offset int64) *Line {

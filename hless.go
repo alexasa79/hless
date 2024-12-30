@@ -11,6 +11,8 @@ import (
 	"github.com/alexasa79/hless/internal/model"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fred1268/go-clap/clap"
+
+	_ "net/http/pprof"
 )
 
 type config struct {
@@ -36,7 +38,7 @@ Options:
       --profile         Enable CPU profiling.
 
   Supported modules with --debug and --trace:
-    all, view, model, search, lines
+    all, view, model, search, lines, io
 `
 
 var gitrev string
@@ -91,11 +93,14 @@ func main() {
 					model.SL.MinLevel = newLevel
 				case "lines":
 					lines.LL.MinLevel = newLevel
+				case "io":
+					lines.LIO.MinLevel = newLevel
 				case "all":
 					model.ML.MinLevel = newLevel
 					model.VL.MinLevel = newLevel
 					model.SL.MinLevel = newLevel
 					lines.LL.MinLevel = newLevel
+					lines.LIO.MinLevel = newLevel
 				}
 			}
 		}
@@ -107,6 +112,7 @@ func main() {
 		model.VL.Info("Logging at level %v", model.VL.MinLevel)
 		model.SL.Info("Logging at level %v", model.SL.MinLevel)
 		lines.LL.Info("Logging at level %v", lines.LL.MinLevel)
+		lines.LIO.Info("Logging at level %v", lines.LIO.MinLevel)
 	}
 
 	var buffer *lines.Buffer

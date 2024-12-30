@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func Test1(t *testing.T) {
+func TestLines1(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -43,7 +43,7 @@ func Test1(t *testing.T) {
 	utils.Assert(lines.Next(first) == nil)
 }
 
-func Test2(t *testing.T) {
+func TestLines2(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -73,7 +73,7 @@ func Test2(t *testing.T) {
 	utils.Assert(lines.Next(second) == nil)
 }
 
-func Test3(t *testing.T) {
+func TestLines3(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -98,7 +98,7 @@ func Test3(t *testing.T) {
 	utils.Assert(third.Offset == 20)
 }
 
-func Test4(t *testing.T) {
+func TestLines4(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -130,7 +130,7 @@ func Test4(t *testing.T) {
 	checkLine(lines, third, 20, 9, 10)
 }
 
-func Test5(t *testing.T) {
+func TestLines5(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -152,7 +152,7 @@ func Test5(t *testing.T) {
 	checkLine(lines, second, 10, 5, 5)
 }
 
-func Test6(t *testing.T) {
+func TestLines6(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
 	lines.batchSize = 1
@@ -185,7 +185,7 @@ func Test6(t *testing.T) {
 	checkLine(lines, second, 10, 9, 10)
 }
 
-func Test7(t *testing.T) {
+func TestLines7(t *testing.T) {
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
 	lines.batchSize = 1

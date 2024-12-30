@@ -203,6 +203,18 @@ func (m *Model) renderStatusBar() string {
 		return st1 + "\n" + st2
 	}
 
+	if m.viewCommand {
+		st1 := " VIEW options"
+		res := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, st1))
+
+		res += "\n"
+
+		st2 := " b/a - hide before/after, s/h - show/hide pattern, c - clear, A - show current word"
+		res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, st2))
+
+		return m.statusStyle.Render(res)
+	}
+
 	cts := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
 
 	st1 := m.renderStatusHeader(cts)
@@ -210,10 +222,6 @@ func (m *Model) renderStatusBar() string {
 
 	if marks != "" {
 		st1 += m.statusStyle.Render(" ") + marks
-	}
-
-	if m.viewCommand {
-		st1 += m.statusStyle.Render(" VIEW ")
 	}
 
 	st1 += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, ""))
