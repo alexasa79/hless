@@ -265,7 +265,7 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 		m.onPageUp()
 	}
 
-	if k == "pgdown" || k == " " {
+	if k == "pgdown" {
 		m.onPageDown()
 	}
 
@@ -277,7 +277,7 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 		m.centerCursor()
 	}
 
-	if k == "m" {
+	if k == "m" || k == " " {
 		m.onToggleMark()
 	}
 

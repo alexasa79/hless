@@ -21,7 +21,7 @@ func (m *Model) renderHelp() string {
  f           - Move the cursor half a page down.
  Enter       - Move the screen to place the current line in the middle of the
                screen.
- m           - Toggle mark on the current line. Press again to cycle through
+ m or space  - Toggle mark on the current line. Press again to cycle through
                different colors.
  M           - Clear all marks in the current line.
  .           - Jump to the next marked line.

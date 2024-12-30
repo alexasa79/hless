@@ -104,7 +104,7 @@ type Model struct {
 	statusStyle      lipgloss.Style
 	promptStyle      lipgloss.Style
 	editorStyle      lipgloss.Style
-	markStyle        [3]lipgloss.Style
+	markStyle        [5]lipgloss.Style
 	textHeader1Style lipgloss.Style
 	textHeader2Style lipgloss.Style
 	boldTextStyle    lipgloss.Style
@@ -244,10 +244,12 @@ func InitialModel(b *lines.Buffer, gitrev string, buildTime string) *Model {
 		promptStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
 			Foreground(lipgloss.Color("#000000")),
-		markStyle: [3]lipgloss.Style{
+		markStyle: [5]lipgloss.Style{
 			lipgloss.NewStyle().Background(lipgloss.Color("#1976d2")).Foreground(lipgloss.Color("#ffffff")),
-			lipgloss.NewStyle().Background(lipgloss.Color("#e65100")).Foreground(lipgloss.Color("#ffffff")),
 			lipgloss.NewStyle().Background(lipgloss.Color("#2e7d32")).Foreground(lipgloss.Color("#ffffff")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#e65100")).Foreground(lipgloss.Color("#ffffff")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#7c9f00")).Foreground(lipgloss.Color("#ffffff")),
+			lipgloss.NewStyle().Background(lipgloss.Color("#87009f")).Foreground(lipgloss.Color("#ffffff")),
 		},
 		textHeader1Style: lipgloss.NewStyle().
 			Background(lipgloss.Color("#0d47a1")).
