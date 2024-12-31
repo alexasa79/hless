@@ -56,7 +56,9 @@ type Lines struct {
 
 	batchSize int
 
-	view *View
+	currentView   *View
+	mainView      *View
+	alternateView *View
 }
 
 func LineComp(a, b *Line) int {
@@ -84,9 +86,12 @@ func NewLines(data *Buffer) *Lines {
 		sections:       avltree.NewAVLTree[*Section](SectionComp),
 		lines:          avltree.NewAVLTree[*Line](LineComp),
 		currentSection: newSection(0, ""),
-		view:           NewView(),
+		mainView:       NewView(),
+		alternateView:  NewView(),
 		batchSize:      128,
 	}
+
+	lines.currentView = lines.mainView
 
 	lines.sections.Insert(lines.currentSection)
 
@@ -109,12 +114,12 @@ func (lines *Lines) First() *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	if lines.view.forcedStart != 0 {
-		res := lines.at(lines.view.forcedStart)
+	if lines.currentView.forcedStart != 0 {
+		res := lines.at(lines.currentView.forcedStart)
 		return res
 	}
 
-	res := lines.view.GetFirst()
+	res := lines.currentView.GetFirst()
 	if res != nil {
 		utils.Assert(lines.visible(res), res)
 		return res
@@ -126,7 +131,7 @@ func (lines *Lines) First() *Line {
 	}
 
 	if lines.visible(res) {
-		lines.view.NoteFirst(res)
+		lines.currentView.NoteFirst(res)
 	}
 
 	return res
@@ -141,7 +146,7 @@ func (lines *Lines) SetFirst(line *Line) {
 	}
 
 	utils.Assert(lines.visible(line), line)
-	lines.view.NoteFirst(line)
+	lines.alternateView.NoteFirst(line)
 
 	LL.Debug("Set first line to %v", line)
 }
@@ -155,7 +160,7 @@ func (lines *Lines) SetLast(line *Line) {
 	}
 
 	utils.Assert(lines.visible(line), line)
-	lines.view.NoteLast(line)
+	lines.alternateView.NoteLast(line)
 
 	LL.Debug("Set last line to %v", line)
 }
@@ -164,13 +169,13 @@ func (lines *Lines) Last() *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	if lines.view.forcedEnd != math.MaxInt64 {
-		res := lines.at(lines.view.forcedEnd)
+	if lines.currentView.forcedEnd != math.MaxInt64 {
+		res := lines.at(lines.currentView.forcedEnd)
 		LL.Debug("Asked to return last line. Returning %+v", res)
 		return res
 	}
 
-	res := lines.view.GetLast()
+	res := lines.currentView.GetLast()
 	if res != nil {
 		utils.Assert(lines.visible(res), res)
 		LL.Debug("Asked to return last line. Returning %+v", res)
@@ -183,7 +188,7 @@ func (lines *Lines) Last() *Line {
 	}
 
 	if lines.visible(res) {
-		lines.view.NoteLast(res)
+		lines.currentView.NoteLast(res)
 	}
 
 	LL.Debug("Asked to return last line. Returning %+v", res)
@@ -198,11 +203,11 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 		return nil
 	}
 
-	if line.Offset+lines.RawLength(line) >= lines.view.forcedEnd {
+	if line.Offset+lines.RawLength(line) >= lines.currentView.forcedEnd {
 		return nil
 	}
 
-	next = lines.view.NextOf(line)
+	next = lines.currentView.NextOf(line)
 	if next != nil {
 		utils.Assert(lines.visible(next), next)
 		return next
@@ -218,7 +223,7 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 	}
 
 	if lines.visible(line) && lines.visible(next) {
-		lines.view.NoteSuccessor(line, next)
+		lines.currentView.NoteSuccessor(line, next)
 	}
 
 	return next
@@ -232,11 +237,11 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 		return nil
 	}
 
-	if line.Offset <= lines.view.forcedStart {
+	if line.Offset <= lines.currentView.forcedStart {
 		return nil
 	}
 
-	prev = lines.view.PrevOf(line)
+	prev = lines.currentView.PrevOf(line)
 	if prev != nil {
 		utils.Assert(lines.visible(prev))
 		return prev
@@ -252,7 +257,7 @@ func (lines *Lines) Prev(line *Line) (prev *Line) {
 	}
 
 	if lines.visible(line) && lines.visible(prev) {
-		lines.view.NotePredecessor(line, prev)
+		lines.currentView.NotePredecessor(line, prev)
 	}
 
 	return prev
@@ -269,7 +274,7 @@ func (lines *Lines) At(offset int64) *Line {
 	mx.Lock()
 	defer mx.Unlock()
 
-	if lines.view.OutOfRange(offset) {
+	if lines.currentView.OutOfRange(offset) {
 		return nil
 	}
 
@@ -295,11 +300,11 @@ func (lines *Lines) At(offset int64) *Line {
 
 func (lines *Lines) visible(line *Line) bool {
 	show := true
-	if lines.view.showPattern != nil && !lines.view.showPattern.MatchString(lines.text(line)) {
+	if lines.currentView.showPattern != nil && !lines.currentView.showPattern.MatchString(lines.text(line)) && !lines.currentView.Has(line) {
 		show = false
 	}
 
-	if lines.view.hidePattern != nil && lines.view.hidePattern.MatchString(lines.text(line)) {
+	if lines.currentView.hidePattern != nil && lines.currentView.hidePattern.MatchString(lines.text(line)) && !lines.currentView.Has(line) {
 		show = false
 	}
 
@@ -310,11 +315,22 @@ func (lines *Lines) Visible(line *Line) bool {
 	mx.Lock()
 	defer mx.Unlock()
 
-	if lines.view.OutOfRange(line.Offset) {
+	if lines.currentView.OutOfRange(line.Offset) {
 		return false
 	}
 
 	return lines.visible(line)
+}
+
+func (lines *Lines) ToggleView() {
+	mx.Lock()
+	defer mx.Unlock()
+
+	if lines.currentView == lines.alternateView {
+		lines.currentView = lines.mainView
+	} else {
+		lines.currentView = lines.alternateView
+	}
 }
 
 func (lines *Lines) text(line *Line) string {
@@ -366,8 +382,29 @@ func (lines *Lines) RawLength(line *Line) int64 {
 	return res
 }
 
+func (lines *Lines) resetView() {
+	lines.alternateView.Reset()
+}
+
 func (lines *Lines) ResetView() {
-	lines.view.Reset()
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.resetView()
+}
+
+func (lines *Lines) SetAlternateView() {
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.currentView = lines.alternateView
+}
+
+func (lines *Lines) SetMainView() {
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.currentView = lines.mainView
 }
 
 func (lines *Lines) SetShowPattern(pat string) {
@@ -375,13 +412,13 @@ func (lines *Lines) SetShowPattern(pat string) {
 	defer mx.Unlock()
 
 	if pat != "" {
-		lines.view.showPattern = regexp.MustCompile(pat)
+		lines.alternateView.showPattern = regexp.MustCompile(pat)
 	} else {
-		lines.view.showPattern = nil
+		lines.alternateView.showPattern = nil
 	}
 
 	LL.Debug("Set show pattern to %s", pat)
-	lines.ResetView()
+	lines.resetView()
 }
 
 func (lines *Lines) SetHidePattern(pat string) {
@@ -389,13 +426,13 @@ func (lines *Lines) SetHidePattern(pat string) {
 	defer mx.Unlock()
 
 	if pat != "" {
-		lines.view.hidePattern = regexp.MustCompile(pat)
+		lines.alternateView.hidePattern = regexp.MustCompile(pat)
 	} else {
-		lines.view.hidePattern = nil
+		lines.alternateView.hidePattern = nil
 	}
 
 	LL.Debug("Set hide pattern to %s", pat)
-	lines.ResetView()
+	lines.resetView()
 }
 
 func (lines *Lines) Refresh() {
@@ -407,6 +444,20 @@ func (lines *Lines) Refresh() {
 		lines.readForward()
 		lines.fileSize = lines.data.fileSize
 	}
+}
+
+func (lines *Lines) AddToView(line *Line) {
+	mx.Lock()
+	defer mx.Unlock()
+
+	lines.alternateView.Add(line)
+}
+
+func (lines *Lines) IsAlternateView() bool {
+	mx.Lock()
+	defer mx.Unlock()
+
+	return lines.currentView == lines.alternateView
 }
 
 func (line *Line) Name() string {

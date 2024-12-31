@@ -593,7 +593,12 @@ func (m *Model) onAddCurrentWordShowPattern() {
 		m.showPattern = fmt.Sprintf("%s|%s", m.showPattern, line[start:end])
 	}
 	m.lines.SetShowPattern(m.showPattern)
+	m.lines.SetAlternateView()
 	m.fixCursor()
+}
+
+func (m *Model) toggleView() {
+	m.lines.ToggleView()
 }
 
 func (m *Model) hideBeforeCursor() {
@@ -601,11 +606,13 @@ func (m *Model) hideBeforeCursor() {
 	m.top.Segment = 0
 	m.lines.SetFirst(m.top.Line)
 	m.lines.ResetView()
+	m.lines.SetAlternateView()
 }
 
 func (m *Model) hideAfterCursor() {
 	m.lines.SetLast(m.cursorLine)
 	m.lines.ResetView()
+	m.lines.SetAlternateView()
 }
 
 func (m *Model) hideReset() {
@@ -1119,6 +1126,10 @@ func (m *Model) centerCursor() {
 
 	m.top = pos
 	m.normalizeView()
+}
+
+func (m *Model) addCurrentLineToView() {
+	m.lines.AddToView(m.cursorLine)
 }
 
 func (m *Model) fixCursor() {

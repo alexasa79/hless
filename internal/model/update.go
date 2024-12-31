@@ -57,6 +57,7 @@ func (m *Model) UpdateShowBox(msg tea.Msg) []tea.Cmd {
 		m.showPattern = m.textbox.Value()
 		m.History.Append(m.textbox.Value())
 		m.lines.SetShowPattern(m.showPattern)
+		m.lines.SetAlternateView()
 		m.fixCursor()
 	} else if k == "up" {
 		m.textbox.SetValue(m.History.Prev(m.textbox.Value()))
@@ -88,6 +89,7 @@ func (m *Model) UpdateHideBox(msg tea.Msg) []tea.Cmd {
 		m.hidePattern = m.textbox.Value()
 		m.History.Append(m.textbox.Value())
 		m.lines.SetHidePattern(m.hidePattern)
+		m.lines.SetAlternateView()
 		m.fixCursor()
 	} else if k == "up" {
 		m.textbox.SetValue(m.History.Prev(m.textbox.Value()))
@@ -278,7 +280,11 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 	}
 
 	if k == "m" || k == " " {
-		m.onToggleMark()
+		if k == " " && viewCommand {
+			m.addCurrentLineToView()
+		} else {
+			m.onToggleMark()
+		}
 	}
 
 	if k == "M" {
@@ -421,6 +427,7 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 		m.hideReset()
 		m.lines.SetShowPattern("")
 		m.lines.SetHidePattern("")
+		m.lines.SetAlternateView()
 	}
 
 	if k == "A" {
@@ -450,7 +457,12 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 	}
 
 	if k == "v" {
-		m.viewCommand = true
+		if viewCommand {
+			m.toggleView()
+			m.fixCursor()
+		} else {
+			m.viewCommand = true
+		}
 	}
 
 	if k == "i" {

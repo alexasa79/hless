@@ -60,14 +60,16 @@ func (m *Model) renderHelp() string {
 
  Hiding various portions of the file is available through 'v' keyboard
  shortcut. To enter one of the shortcuts below, first press 'v' and then the
- shortcut.
+ shortcut. Comands below change the alternate view.
 
- a - Hide everything after the current line.
- b - Hide everything before the current line.
- s - Only show lines matching the specified pattern.
- h - Hide the lines matching the specified pattern.
- c - Unhide everything. Show everything.
- A - Add currently selected word to show pattern.
+ a     - Hide everything after the current line.
+ b     - Hide everything before the current line.
+ s     - Only show lines matching the specified pattern.
+ h     - Hide the lines matching the specified pattern.
+ c     - Unhide everything. Show everything.
+ A     - Add currently selected word to show pattern.
+ v     - Toggle between showing everything and the alternate view.
+ Space - Add current line to the alternate view.
 
 
 `

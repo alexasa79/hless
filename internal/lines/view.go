@@ -50,6 +50,8 @@ func NewView() *View {
 func (view *View) Reset() {
 	LL.Trace("Resetting the view")
 	lines := avltree.NewAVLTree[*LineRecord](ViewRangeComp)
+	view.forcedStart = 0
+	view.forcedEnd = math.MaxInt64
 	view.lines = lines
 	view.first = nil
 	view.last = nil
@@ -145,4 +147,28 @@ func (view *View) GetFirst() *Line {
 
 func (view *View) GetLast() *Line {
 	return view.last
+}
+
+func (view *View) Add(line *Line) {
+	lr := &LineRecord{Line: line}
+	pred := view.lines.Predecessor(lr)
+	if pred != nil {
+		(*pred).Succ = line
+		lr.Pred = (*pred).Line
+	}
+
+	succ := view.lines.Successor(lr)
+	if succ != nil {
+		(*succ).Pred = line
+		lr.Succ = (*succ).Line
+	}
+
+	view.lines.Insert(lr)
+}
+
+func (view *View) Has(line *Line) bool {
+	if line == nil {
+		return false
+	}
+	return view.lines.Contains(&LineRecord{Line: line})
 }

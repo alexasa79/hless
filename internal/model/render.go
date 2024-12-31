@@ -93,6 +93,9 @@ func (m *Model) renderStatusHeader(cts *time.Time) string {
 	if cts != nil {
 		res += cts.String()
 	}
+	if m.lines.IsAlternateView() {
+		res = "ALT VIEW " + res
+	}
 	return m.statusStyle.Render(res)
 }
 
@@ -209,7 +212,7 @@ func (m *Model) renderStatusBar() string {
 
 		res += "\n"
 
-		st2 := " b/a - hide before/after, s/h - show/hide pattern, c - clear, A - show current word"
+		st2 := " b/a - hide before/after, s/h - show/hide pattern"
 		res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, st2))
 
 		return m.statusStyle.Render(res)
