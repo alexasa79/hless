@@ -443,6 +443,7 @@ func (lines *Lines) Refresh() {
 	if lines.data.fileSize != lines.fileSize {
 		lines.readForward()
 		lines.fileSize = lines.data.fileSize
+		lines.currentView.Reset()
 	}
 }
 
