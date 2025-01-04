@@ -65,7 +65,6 @@ func main() {
 		}
 		pprof.StartCPUProfile(prof)
 		defer pprof.StopCPUProfile()
-		defer prof.Close()
 	}
 
 	if cfg.Help {
