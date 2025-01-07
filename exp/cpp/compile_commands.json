@@ -1,0 +1,78 @@
+[
+ {
+  "directory": "/Users/sasandl/hobbies/hless/exp/cpp",
+  "arguments": [
+   "g++",
+   "-Wall",
+   "--std=c++20",
+   "-g",
+   "-Isrc",
+   "-DTB_OPT_ATTR_W=64",
+   "-c",
+   "src/hless.cpp",
+   "-o",
+   "obj/hless.o",
+   "-MMD",
+   "-MF",
+   "obj/hless.d"
+  ],
+  "file": "src/hless.cpp"
+ },
+ {
+  "directory": "/Users/sasandl/hobbies/hless/exp/cpp",
+  "arguments": [
+   "g++",
+   "-Wall",
+   "--std=c++20",
+   "-g",
+   "-Isrc",
+   "-DTB_OPT_ATTR_W=64",
+   "-c",
+   "src/logging.cpp",
+   "-o",
+   "obj/logging.o",
+   "-MMD",
+   "-MF",
+   "obj/logging.d"
+  ],
+  "file": "src/logging.cpp"
+ },
+ {
+  "directory": "/Users/sasandl/hobbies/hless/exp/cpp",
+  "arguments": [
+   "g++",
+   "-Wall",
+   "--std=c++20",
+   "-g",
+   "-Isrc",
+   "-DTB_OPT_ATTR_W=64",
+   "-c",
+   "src/main.cpp",
+   "-o",
+   "obj/main.o",
+   "-MMD",
+   "-MF",
+   "obj/main.d"
+  ],
+  "file": "src/main.cpp"
+ },
+ {
+  "directory": "/Users/sasandl/hobbies/hless/exp/cpp",
+  "arguments": [
+   "g++",
+   "-Wall",
+   "--std=c++20",
+   "-g",
+   "-Isrc",
+   "-DTB_OPT_ATTR_W=64",
+   "-c",
+   "src/termbox2.cpp",
+   "-o",
+   "obj/termbox2.o",
+   "-MMD",
+   "-MF",
+   "obj/termbox2.d"
+  ],
+  "file": "src/termbox2.cpp"
+ }
+]

@@ -18,16 +18,12 @@ enum {
 };
 
 #define fatal(...) ({ \
-    if (___logf.is_open()) { \
-        ____log(LOGGING_FATAL, LOGGING_NAME, __FILE__, __LINE__, ##__VA_ARGS__); \
-    } \
+    ____log(LOGGING_FATAL, LOGGING_NAME, __FILE__, __LINE__, ##__VA_ARGS__); \
     abort(); \
 })
 #define ___log(level, ...) \
     if (LOGGING_MODULE >= level) { \
-        if (___logf.is_open()) { \
-            ____log(level, LOGGING_NAME, __FILE__, __LINE__, ##__VA_ARGS__); \
-        } \
+        ____log(level, LOGGING_NAME, __FILE__, __LINE__, ##__VA_ARGS__); \
     }
 
 #define loge(...) ___log(LOGGING_ERROR, ##__VA_ARGS__)
@@ -63,11 +59,14 @@ void ____log(int level, const char *module, const char *filename, int line, Args
     oss << levels[level] << " ";
     oss << filename << ":" << line << " ";
 
-    auto add_space = [](auto&& value, std::ostringstream& oss) {
-        oss << value << ' ';
-    };
-    (add_space(std::forward<Args>(args), oss), ...);
+    (oss << ... << std::forward<Args>(args));
 
-    ___logf << oss.str() << std::endl;
-    ___logf.flush();
+    if (___logf.is_open()) {
+        ___logf << oss.str() << std::endl;
+        ___logf.flush();
+    }
+
+    if (level == LOGGING_FATAL) {
+        std::cerr << oss.str() << std::endl;
+    }
 }

@@ -1,29 +1,34 @@
 TARGET = hh
 
 CPP = g++
-CPPFLAGS = -Wall --std=c++20 -g -I$(S)
-LDFLAGS = -pthread
+CPPFLAGS = -O3 -Wall --std=c++20 -g -I$(S) -DTB_OPT_ATTR_W=64
+LDFLAGS =
 
 S = src
-O = obj
+O = out
 T = tst
 
 SRCS = $(wildcard $(S)/*.cpp)
-TSTS = $(patsubst $(T)/%.cpp, $(O)/%, $(wildcard $(T)/*.cpp))
-OBJS = $(patsubst $(S)/%.cpp, $(O)/%.o, $(SRCS))
-DEPS = $(patsubst $(S)/%.cpp, $(O)/%.d, $(SRCS))
+OBJS = $(patsubst $(S)/%.cpp, $(O)/$(S)/%.o, $(SRCS))
+DEPS = $(patsubst $(S)/%.cpp, $(O)/$(S)/%.d, $(SRCS))
+TSTS = $(patsubst $(T)/%.cpp, $(O)/$(T)/%, $(wildcard $(T)/*.cpp))
 
 all: build test
 
 build: $(TARGET)
 
-$(O)/%.o: $(S)/%.cpp
+$(O)/$(S)/%.o: $(S)/%.cpp
+	@mkdir -p $(O)/$(S)
+	$(CPP) $(CPPFLAGS) -c $< -o $@ -MMD -MF $(O)/$*.d
+
+$(O)/$(T)/%.o: $(T)/%.cpp
+	@mkdir -p $(O)/$(T)
 	$(CPP) $(CPPFLAGS) -c $< -o $@ -MMD -MF $(O)/$*.d
 
 $(TARGET): $(OBJS)
 	$(CPP) $(LDFLAGS) $(^) -o $(@)
 
-$(O)/test-%: $(T)/test-%.o $(filter-out $(O)/main.o, $(OBJS))
+$(O)/%-test: $(O)/%-test.o $(filter-out $(O)/$(S)/main.o, $(OBJS))
 	$(CPP) $(LDFLAGS) $(^) -o $(@)
 
 test: $(TSTS)
