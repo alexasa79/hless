@@ -77,7 +77,7 @@ Buffer::~Buffer()
 
 char Buffer::operator[](int64_t i)
 {
-    std::lock_guard<std::mutex> lock(mx_);
+    // std::lock_guard<std::mutex> lock(mx_);
     if (i >= last_chunk_.start && i < last_chunk_.end) {
         return reinterpret_cast<const char *>(last_chunk_.ptr)[i - last_chunk_.start];
     }
@@ -95,4 +95,14 @@ int64_t Buffer::size()
 {
     std::lock_guard<std::mutex> lock(mx_);
     return size_;
+}
+
+int Buffer::sum_buffer()
+{
+    char c = 0;
+    auto p = reinterpret_cast<const char *>(last_chunk_.ptr);
+    for (int64_t i = 0; i < size_; i++) {
+        c += p[i];
+    }
+    return int(c);
 }

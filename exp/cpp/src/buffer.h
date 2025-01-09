@@ -25,6 +25,8 @@ public:
 
     int64_t size();
 
+    int sum_buffer();
+
 private:
     void reader_thread();
 
