@@ -461,6 +461,36 @@ func (lines *Lines) IsAlternateView() bool {
 	return lines.currentView == lines.alternateView
 }
 
+// Call what function inside of the buffer, under various locks. The what function
+// is expected to return the
+func (lines *Lines) FastFind(
+	from int64,
+	to int64,
+	what func(data []byte) (int64, bool),
+) *Line {
+	mx.Lock()
+	defer mx.Unlock()
+
+	var newOffset int64
+	var res *Line = nil
+	var found bool
+
+	for {
+		newOffset, found = lines.data.FastFind(from, to, what)
+		if found {
+			res = lines.at(newOffset)
+			utils.Assert(res != nil)
+			if lines.visible(res) {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	return res
+}
+
 func (line *Line) Name() string {
 	mx.Lock()
 	defer mx.Unlock()

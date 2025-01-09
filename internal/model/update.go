@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"time"
 
 	"github.com/alexasa79/hless/internal/avltree"
@@ -151,6 +152,9 @@ func (m *Model) UpdateSearch(msg tea.Msg) []tea.Cmd {
 		m.activeSearchTextbox = false
 		m.textbox.Blur()
 		m.newSearch.pattern = m.textbox.Value()
+		if m.newSearch.regex {
+			m.newSearch.re = regexp.MustCompile(m.newSearch.pattern)
+		}
 		m.History.Append(m.textbox.Value())
 		if m.newSearch.pattern != m.searches[m.search].pattern ||
 			m.newSearch.regex != m.searches[m.search].regex {

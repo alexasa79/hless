@@ -6,7 +6,6 @@ import (
 	"syscall"
 
 	"github.com/alexasa79/hless/internal/utils"
-	"golang.org/x/exp/mmap"
 	"golang.org/x/sys/unix"
 )
 
@@ -24,7 +23,6 @@ type Buffer struct {
 
 	filename string
 	fileSize int64
-	m        *mmap.ReaderAt
 	bytes    []byte
 	streamFd int
 
@@ -34,15 +32,22 @@ type Buffer struct {
 }
 
 func NewBufferFromFile(filename string) *Buffer {
-	stat, err := os.Stat(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		panic(err)
 	}
-	fileSize := stat.Size()
+	defer f.Close()
 
-	LL.Debug("Memory mapping %d bytes long file %s", fileSize, filename)
+	fi, err := f.Stat()
+	if err != nil {
+		panic(err)
+	}
 
-	m, err := mmap.Open(filename)
+	fileSize := fi.Size()
+
+	LL.Debug("Memory mapping %d bytes long file %s, file descriptor %d", fileSize, filename, f.Fd())
+
+	data, err := syscall.Mmap(int(f.Fd()), 0, int(fileSize), syscall.PROT_READ, syscall.MAP_SHARED)
 	if err != nil {
 		panic(err)
 	}
@@ -50,7 +55,7 @@ func NewBufferFromFile(filename string) *Buffer {
 	return &Buffer{
 		filename:             filename,
 		fileSize:             fileSize,
-		m:                    m,
+		bytes:                data,
 		bufferType:           bufferTypeFile,
 		BufferRefreshChannel: make(chan BufferRefreshSignal, 10000),
 	}
@@ -135,7 +140,6 @@ func NewBufferFromStdin() (*Buffer, *os.File) {
 }
 
 func (b *Buffer) Close() {
-	b.m.Close()
 }
 
 func (b *Buffer) Size() int64 {
@@ -162,33 +166,14 @@ func (b *Buffer) At(i int64) byte {
 	defer b.mx.Unlock()
 
 	utils.Assert(i >= 0, i)
-
-	switch b.bufferType {
-	case bufferTypeFile:
-		return b.m.At(int(i))
-	case bufferTypeString:
-		return b.bytes[i]
-	case bufferTypeStream:
-		return b.bytes[i]
-	}
-	panic("unreachable")
+	return b.bytes[i]
 }
 
 func (b *Buffer) Range(start, end int64) []byte {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 
-	switch b.bufferType {
-	case bufferTypeFile:
-		buf := make([]byte, end-start)
-		b.m.ReadAt(buf, start)
-		return buf
-	case bufferTypeString:
-		return b.bytes[start:end]
-	case bufferTypeStream:
-		return b.bytes[start:end]
-	}
-	panic("unreachable")
+	return b.bytes[start:end]
 }
 
 func (b *Buffer) Refresh() bool {
@@ -199,20 +184,33 @@ func (b *Buffer) Refresh() bool {
 
 	switch b.bufferType {
 	case bufferTypeFile:
-		stat, err := os.Stat(b.filename)
+		f, err := os.Open(b.filename)
 		if err != nil {
-			return false
+			panic(err)
 		}
-		fileSize := stat.Size()
+		defer f.Close()
+
+		fi, err := f.Stat()
+		if err != nil {
+			panic(err)
+		}
+
+		fileSize := fi.Size()
+
 		if fileSize != b.fileSize {
 			LL.Debug("File's size changed from %d to %d. Remapping", b.fileSize, fileSize)
-			m, err := mmap.Open(b.filename)
+
+			syscall.Munmap(b.bytes)
+
+			data, err := syscall.Mmap(int(f.Fd()), 0, int(fileSize), syscall.PROT_READ, syscall.MAP_SHARED)
+			if err != nil {
+				panic(err)
+			}
 
 			utils.Assert(err == nil, err)
 
 			b.fileSize = fileSize
-			b.m.Close()
-			b.m = m
+			b.bytes = data
 			LL.Trace("New buffer size %d", b.fileSize)
 			return true
 		}
@@ -223,4 +221,20 @@ func (b *Buffer) Refresh() bool {
 		return false
 	}
 	return false
+}
+
+func (b *Buffer) FastFind(
+	from int64,
+	to int64,
+	what func(data []byte) (int64, bool),
+) (
+	int64,
+	bool,
+) {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+
+	utils.Assert(to <= int64(len(b.bytes)), "to %d, buffer length %d", to, len(b.bytes))
+
+	return what(b.bytes[from:to])
 }
