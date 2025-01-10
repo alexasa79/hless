@@ -250,6 +250,8 @@ func (lines *Lines) prev(line *Line) *Line {
 }
 
 func (lines *Lines) jumpTo(offset int64, name string) {
+	LIO.Trace("Asked to jump to offset %d (under name %s)", offset, name)
+
 	s := Section{read: Range{start: offset, end: offset}}
 	t := lines.sections.Get(&s)
 	if t != nil {
@@ -281,6 +283,8 @@ func (lines *Lines) jumpTo(offset int64, name string) {
 }
 
 func (lines *Lines) at(offset int64) *Line {
+	LIO.Trace("Asked for a line at offset %d", offset)
+
 	name := fmt.Sprintf("@%d", offset)
 	lines.jumpTo(offset, name)
 
