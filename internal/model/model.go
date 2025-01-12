@@ -1015,6 +1015,8 @@ func (m *Model) prevMark() {
 	}
 }
 
+// Convert argument line string into list of segments, at most m.width in length.
+// Fill specifies if the function should fill the last segment to the m.width.
 func (m *Model) segmentize(l *lines.Line, fill bool) []string {
 	line := m.lines.Text(l)
 	res := make([]string, 0)
@@ -1035,6 +1037,8 @@ func (m *Model) segmentize(l *lines.Line, fill bool) []string {
 	return res
 }
 
+// Break the line into segments, at most m.width long. Color the segments, using [boldStart, boldEnd)
+// as well as m.searches.
 func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style, fill bool) []Cegment {
 	segs := m.segmentize(l, fill)
 	r0 := make([]utils.Range, 0)
@@ -1093,6 +1097,9 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 
 		res[seg].style = append(res[seg].style, r.style)
 		l := r.end - r.start
+		utils.Assert(seg < len(segs), seg, len(segs))
+		utils.Assert(start < len(segs[seg]), start, len(segs[seg]), seg)
+		utils.Assert(start+l <= len(segs[seg]), start, l, segs[seg])
 		res[seg].subsegments = append(res[seg].subsegments, segs[seg][start:start+l])
 
 		start += l
