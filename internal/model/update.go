@@ -502,7 +502,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeShowTextbox {
 				cmds = append(cmds, m.UpdateShowBox(msg)...)
 			} else if m.activeHideTextbox {
-				cmds = append(cmds, m.UpdateHelp(msg)...)
+				cmds = append(cmds, m.UpdateHideBox(msg)...)
 			} else if m.activeGotoTextbox {
 				cmds = append(cmds, m.UpdateGotoBox(msg)...)
 			} else if m.activeSearchTextbox {
