@@ -571,6 +571,7 @@ func (m *Model) onAddCurrentWord() {
 	} else {
 		m.searches[m.search].pattern += "|" + line[start:end]
 	}
+	m.searches[m.search].re = regexp.MustCompile(m.newSearch.pattern)
 
 	m.selectionStart = -1
 	m.selectionEnd = -1

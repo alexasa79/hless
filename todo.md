@@ -2,10 +2,10 @@
 1. [x] 'a' adds the selected word to the next search pattern after currently selected and not to the next available search pattern.
 2. [x] search colors 4 and 5 are almost identical.
 3. [ ] Crash in jump parser, when entering something that starts with a number but is not a proper number.
-4. [ ] Fix working with stdin.
+4. [x] Fix working with stdin.
 5. [x] Except for the cursor, do not print spaces to fill the rest of the line.
 6. [ ] Fix selective view for large files.
-7. [ ] Crash:
+7. [x] Crash:
 ```
 Caught panic:
 
@@ -33,6 +33,37 @@ github.com/charmbracelet/bubbletea.(*Program).Run(0xc0003bb860)
 main.main()
         /Users/sasandl/hobbies/hless/hless.go:141 +0x810
 ```
+8. [x] In Build 2025-01-13T09:12:57 2eed0e7ab4b446d15f47dc14d6b2e487d3814f62.
+   Running a grep command and piping output to hless. Once start searching in
+   the buffer, the command gets stuck.
+   -- Could not reproduce.
+9. [x] In Build Build 2025-01-13T09:12:57
+   2eed0e7ab4b446d15f47dc14d6b2e487d3814f62 Crash:
+```
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x10 pc=0x537284]
+
+goroutine 309 [running]:
+regexp.(*Regexp).allMatches(0x0, {0x0, 0x0}, {0x7fcb6f891332, 0x100682, 0x100682}, 0x100683, 0xc000328bd0)
+        /opt/homebrew/Cellar/go/1.23.1/libexec/src/regexp/regexp.go:778 +0x104
+regexp.(*Regexp).FindAllIndex(0x0?, {0x7fcb6f891332?, 0x0?, 0x0?}, 0x0?)
+        /opt/homebrew/Cellar/go/1.23.1/libexec/src/regexp/regexp.go:1100 +0x65
+github.com/alexasa79/hless/internal/model.(*Model).findFastInner(0x0?, {0x7fcb6f891332?, 0xc00029ad00?, 0x46a79b?}, 0x8?, 0x332, 0x1)
+        /Users/sasandl/hobbies/hless/internal/model/find.go:14 +0xde
+github.com/alexasa79/hless/internal/model.(*Model).findNextWithProgress.func1.1({0x7fcb6f891332?, 0xc00029ad60?, 0x2000?})
+        /Users/sasandl/hobbies/hless/internal/model/find.go:69 +0x45
+github.com/alexasa79/hless/internal/lines.(*Buffer).FastFind(0xc0002cc1e0, 0x332, 0x1009b4, 0xc00029af00)
+        /Users/sasandl/hobbies/hless/internal/lines/buffer.go:239 +0x19c
+github.com/alexasa79/hless/internal/lines.(*Lines).FastFind(0xc0002cc230, 0x332, 0x1009b4, 0xc000328f00)
+        /Users/sasandl/hobbies/hless/internal/lines/lines.go:479 +0xd0
+github.com/alexasa79/hless/internal/model.(*Model).findNextWithProgress.func1()
+        /Users/sasandl/hobbies/hless/internal/model/find.go:67 +0x265
+github.com/charmbracelet/bubbletea.(*Program).handleCommands.func1.1()
+        /Users/sasandl/go/pkg/mod/github.com/charmbracelet/bubbletea@v0.25.0/tea.go:294 +0x29
+created by github.com/charmbracelet/bubbletea.(*Program).handleCommands.func1 in goroutine 12
+        /Users/sasandl/go/pkg/mod/github.com/charmbracelet/bubbletea@v0.25.0/tea.go:293 +0x131
+```
+
 
 # Features
 1. [x] Support more marker colors.
