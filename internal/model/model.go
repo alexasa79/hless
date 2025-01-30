@@ -624,7 +624,7 @@ func (m *Model) hideReset() {
 }
 
 func (m *Model) startProgress(prompt string, progressCmd tea.Cmd) tea.Cmd {
-	m.progressInterrupt = make(chan bool)
+	m.progressInterrupt = make(chan bool, 1)
 	m.inProgress = true
 	m.progressPrompt = prompt
 	m.progressCmd = progressCmd
