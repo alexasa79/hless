@@ -571,7 +571,7 @@ func (m *Model) onAddCurrentWord() {
 	} else {
 		m.searches[m.search].pattern += "|" + line[start:end]
 	}
-	m.searches[m.search].re = regexp.MustCompile(m.newSearch.pattern)
+	m.searches[m.search].re = regexp.MustCompile(m.searches[m.search].pattern)
 
 	m.selectionStart = -1
 	m.selectionEnd = -1
@@ -1100,7 +1100,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 		l := r.end - r.start
 		utils.Assert(seg < len(segs), seg, len(segs))
 		utils.Assert(start < len(segs[seg]), start, len(segs[seg]), seg)
-		utils.Assert(start+l <= len(segs[seg]), start, l, segs[seg])
+		utils.Assert(start+l <= len(segs[seg]), start, l, len(segs[seg]), segs[seg])
 		res[seg].subsegments = append(res[seg].subsegments, segs[seg][start:start+l])
 
 		start += l
