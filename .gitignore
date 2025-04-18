@@ -1,7 +1,8 @@
 logs/
 .vscode/
-/hh
-/hh-amd64
-/log-gen
+hh
+hh-amd64
+hh-arm64
+log-gen
 hless.log
 .DS_Store
