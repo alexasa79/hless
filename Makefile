@@ -1,4 +1,4 @@
-all: hless hless-amd64
+all: hless hless-amd64 hless-arm64
 
 GITREV = $(shell git rev-parse HEAD)
 DATETIME = $(shell date "+%Y-%m-%dT%H:%M:%S")
@@ -10,6 +10,9 @@ hless hh:
 
 hless-amd64 hh-amd64:
 	GOOS=linux GOARCH=amd64 go build $(ARGS) -o hh-amd64 .
+
+hless-arm64 hh-arm64:
+	GOOS=linux GOARCH=arm64 go build $(ARGS) -o hh-arm64 .
 
 clean:
 	go clean
