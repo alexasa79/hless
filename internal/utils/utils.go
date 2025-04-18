@@ -16,6 +16,7 @@ import (
 )
 
 var UL = hhlog.NewLogger("UTILS")
+var assertHandlers = make([]func(), 0)
 
 func Sprint64(n int64) string {
 	p := message.NewPrinter(language.English)
@@ -49,9 +50,16 @@ func Assert(cond bool, args ...interface{}) {
 			meta += fmt.Sprintf("%+v\n", arg)
 		}
 		text := fmt.Sprintf("Assertion violation at %s:%d, meta=\n%s", file, line, meta)
-		UL.Warning(text)
+		UL.Warning("%s", text)
+		for _, f := range assertHandlers {
+			f()
+		}
 		panic(text)
 	}
+}
+
+func AddAssertHandler(f func()) {
+	assertHandlers = append(assertHandlers, f)
 }
 
 func Check(err error) {
