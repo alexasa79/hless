@@ -1051,13 +1051,7 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 		start += len(seg)
 	}
 
-	var boldCeg CegmentRange
-	if boldStart != -1 {
-		boldCeg = CegmentRange{start: boldStart, end: boldEnd, style: boldStyle}
-		r2 := make([]utils.Range, 0)
-		r2 = append(r2, boldCeg)
-		r0 = utils.RangesProduct(r0, r2)
-	}
+	ML.Trace("Initial set of segments: %+v", r0)
 
 	for i := 0; i < len(m.searches); i++ {
 		style := m.searchStyles[i].Copy()
@@ -1074,19 +1068,19 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 			continue
 		}
 
-		r1 := make([]utils.Range, 0)
 		for _, match := range matches {
-			r1 = append(r1, CegmentRange{start: match.start, end: match.end, style: &style})
-		}
-
-		r0 = utils.RangesProduct(r0, r1)
-
-		if boldStart >= 0 {
-			r2 := make([]utils.Range, 0)
-			r2 = append(r2, boldCeg)
-			r0 = utils.RangesProduct(r0, r2)
+			c := CegmentRange{start: match.start, end: match.end, style: &style}
+			r0 = utils.ApplyColor(r0, c)
 		}
 	}
+
+	if boldStart != -1 {
+		boldCeg := CegmentRange{start: boldStart, end: boldEnd, style: boldStyle}
+		ML.Trace("Applying bold range %+v to %+v", boldCeg, r0)
+		r0 = utils.ApplyColor(r0, boldCeg)
+	}
+
+	ML.Trace("Final list of ranges: %+v", r0)
 
 	res := make([]Cegment, len(segs))
 	res[0].style = make([]*lipgloss.Style, 0)
