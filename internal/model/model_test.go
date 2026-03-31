@@ -31,6 +31,7 @@ func (m *Model) verifyState(t *testing.T, line int64, segment int, cursor int64)
 }
 
 func TestDown1(t *testing.T) {
+		t.Parallel()
 	m := createModel("012345678\n", 1, 2)
 	m.verifyState(t, 0, 0, 0)
 	m.onKeyDown() // showing 12
@@ -49,6 +50,7 @@ func TestDown1(t *testing.T) {
 }
 
 func TestDown2(t *testing.T) {
+		t.Parallel()
 	m := createModel("01\n23\n45\n67\n78\n", 1, 2)
 	m.verifyState(t, 0, 0, 0)
 	m.onKeyDown() // showing 1\n2
@@ -56,6 +58,7 @@ func TestDown2(t *testing.T) {
 }
 
 func TestUp(t *testing.T) {
+		t.Parallel()
 	m := createModel("012345678\n", 1, 2)
 	m.verifyState(t, 0, 0, 0)
 	m.onKeyDown()
@@ -65,6 +68,7 @@ func TestUp(t *testing.T) {
 }
 
 func TestPageDown(t *testing.T) {
+		t.Parallel()
 	m := createModel("01\n23\n45\n67\n78\n", 1, 2)
 	m.onPageDown()
 	m.verifyState(t, 0, 0, 0)

@@ -27,6 +27,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestLines1(t *testing.T) {
+		t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -44,6 +45,7 @@ func TestLines1(t *testing.T) {
 }
 
 func TestLines2(t *testing.T) {
+		t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -74,6 +76,7 @@ func TestLines2(t *testing.T) {
 }
 
 func TestLines3(t *testing.T) {
+		t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -99,6 +102,7 @@ func TestLines3(t *testing.T) {
 }
 
 func TestLines4(t *testing.T) {
+		t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -131,6 +135,7 @@ func TestLines4(t *testing.T) {
 }
 
 func TestLines5(t *testing.T) {
+		t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -153,6 +158,7 @@ func TestLines5(t *testing.T) {
 }
 
 func TestLines6(t *testing.T) {
+		t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
 	lines.batchSize = 1
@@ -186,6 +192,7 @@ func TestLines6(t *testing.T) {
 }
 
 func TestLines7(t *testing.T) {
+		t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
 	lines.batchSize = 1

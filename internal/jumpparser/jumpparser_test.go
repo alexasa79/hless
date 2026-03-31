@@ -9,6 +9,7 @@ import (
 var assert = utils.Assert
 
 func TestTokenizer(t *testing.T) {
+		t.Parallel()
 	tokens := tokenize("100")
 	assert(len(tokens) == 1)
 	assert(tokens[0].Type == TOKEN_NUM)
@@ -48,6 +49,7 @@ func TestTokenizer(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
+		t.Parallel()
 	tokens := tokenize("100%")
 	j, err := parse(tokens)
 	assert(err == nil)

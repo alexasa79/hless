@@ -28,6 +28,7 @@ func (r TestRange) Subrange(start int, end int) Range {
 }
 
 func TestTrivial(t *testing.T) {
+		t.Parallel()
 	{
 		r1 := make([]Range, 0)
 		r1 = append(r1, TestRange{start: 0, end: 10, color: 1})
