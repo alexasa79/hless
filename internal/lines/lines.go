@@ -177,9 +177,12 @@ func (lines *Lines) Last() *Line {
 
 	res := lines.currentView.GetLast()
 	if res != nil {
-		utils.Assert(lines.visible(res), res)
-		LL.Debug("Asked to return last line. Returning %+v", res)
-		return res
+		rawL := lines.RawLength(res)
+		if res.Offset+rawL >= lines.data.Size()-1 {
+			utils.Assert(lines.visible(res), res)
+			LL.Debug("Asked to return last line. Returning %+v", res)
+			return res
+		}
 	}
 
 	res = lines.last()

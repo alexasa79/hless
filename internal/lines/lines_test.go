@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestLines1(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -45,7 +45,7 @@ func TestLines1(t *testing.T) {
 }
 
 func TestLines2(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -75,8 +75,26 @@ func TestLines2(t *testing.T) {
 	utils.Assert(lines.Next(second) == nil)
 }
 
+func TestLinesAfterBlankLine(t *testing.T) {
+	t.Parallel()
+	lines := NewLines(NewBufferFromString("before\n\n==================== UPLOAD\n"))
+	lines.batchSize = 1
+
+	first := lines.First()
+	checkLine(lines, first, 0, 6, 7)
+	utils.Assert(lines.Text(first) == "before")
+
+	blank := lines.Next(first)
+	checkLine(lines, blank, 7, 0, 1)
+	utils.Assert(lines.Text(blank) == "")
+
+	upload := lines.Next(blank)
+	checkLine(lines, upload, 8, 27, 28)
+	utils.Assert(lines.Text(upload) == "==================== UPLOAD")
+}
+
 func TestLines3(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -102,7 +120,7 @@ func TestLines3(t *testing.T) {
 }
 
 func TestLines4(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -135,7 +153,7 @@ func TestLines4(t *testing.T) {
 }
 
 func TestLines5(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 16))
 	lines.batchSize = 1
@@ -158,7 +176,7 @@ func TestLines5(t *testing.T) {
 }
 
 func TestLines6(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
 	lines.batchSize = 1
@@ -192,7 +210,7 @@ func TestLines6(t *testing.T) {
 }
 
 func TestLines7(t *testing.T) {
-		t.Parallel()
+	t.Parallel()
 	r, w, _ := os.Pipe()
 	lines := NewLines(NewBufferFromFileDescriptors(int(r.Fd()), 100))
 	lines.batchSize = 1

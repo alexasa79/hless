@@ -55,6 +55,7 @@ func (lines *Lines) readForward() {
 			pos++
 			lineStart = pos
 			s.read.end = pos
+			continue
 
 		}
 		pos++
