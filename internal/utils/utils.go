@@ -69,7 +69,7 @@ func Check(err error) {
 }
 
 func ExtractTimestamp(input string) *time.Time {
-	regex := `^(\d{4}-\d{2}-\d{2})T(\d{2}[-:]\d{2}[-:]\d{2}\.\d+)?(Z|[+-]\d{2}:?\d{2})?.*`
+	regex := `^(\d{4}-\d{2}-\d{2})[T ](\d{2}[-:]\d{2}[-:]\d{2}(?:\.\d+)?)(Z|[+-]\d{2}:?\d{2})?.*`
 	r := regexp.MustCompile(regex)
 
 	matches := r.FindStringSubmatch(input)
@@ -77,12 +77,12 @@ func ExtractTimestamp(input string) *time.Time {
 		return nil
 	}
 
-	ts := matches[1]
-	ts += "T"
-	ts += strings.ReplaceAll(matches[2], "-", ":")
-	ts += strings.Repeat("0", 18-len(matches[2]))
+	ts := matches[1] + "T" + strings.ReplaceAll(matches[2], "-", ":")
 	tz := strings.ReplaceAll(matches[3], "Z", "+")
 	if tz != "" && tz != "+" {
+		if len(tz) == 5 {
+			tz = tz[:3] + ":" + tz[3:]
+		}
 		ts += tz
 	} else {
 		ts += "+00:00"
