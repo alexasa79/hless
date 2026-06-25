@@ -193,9 +193,9 @@ func (tui *TUI) bytesToInput(code int) {
 	case code == int(' '):
 		tui.inputCh <- Input{Code: " "}
 	case code >= int('a') && code <= int('z'):
-		tui.inputCh <- Input{Code: string(code)}
+		tui.inputCh <- Input{Code: string(rune(code))}
 	case code >= int('A') && code <= int('Z'):
-		tui.inputCh <- Input{Code: string(code), Shift: true}
+		tui.inputCh <- Input{Code: string(rune(code)), Shift: true}
 	default:
 		TL.Info("Received unsupported key code %#x", code)
 	}

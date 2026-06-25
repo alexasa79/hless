@@ -120,7 +120,7 @@ func (l *lexer) tokenize() []token {
 			} else if l.ch == '-' {
 				tokens = append(tokens, token{Type: TOKEN_MINUS, Value: "-"})
 			} else if l.ch == '%' {
-				tokens = append(tokens, token{Type: TOKEN_PERCENT, Value: "u"})
+				tokens = append(tokens, token{Type: TOKEN_PERCENT, Value: "%"})
 			} else if l.ch == 'u' && l.nextCh == 's' {
 				tokens = append(tokens, token{Type: TOKEN_MICROSECOND, Value: "us"})
 				l.readChar()
@@ -277,8 +277,9 @@ func parse(tokens []token) (JumpLocation, error) {
 					res.How = JUMP_FORWARD
 				} else if sub {
 					res.How = JUMP_BACKWARD
+					n = -n
 				}
-				*res.Lines = int64(n)
+				*res.Lines += int64(n)
 			}
 
 			add = false

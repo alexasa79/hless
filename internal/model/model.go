@@ -1273,7 +1273,14 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 
 	if j.Lines != nil {
 		m.gotoLine = int64(*j.Lines)
-		m.gotoHow = j.How
+		if m.gotoLine < 0 {
+			m.gotoLine = -m.gotoLine
+			m.gotoHow = jumpparser.JUMP_BACKWARD
+		} else if m.gotoLine > 0 {
+			m.gotoHow = jumpparser.JUMP_FORWARD
+		} else {
+			m.gotoHow = j.How
+		}
 		return m.startProgress("Counting", m.gotoWithProgress())
 	}
 
