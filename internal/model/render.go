@@ -88,10 +88,14 @@ func (m *Model) renderProgress() string {
 	return res
 }
 
+func formatStatusTimestamp(ts time.Time) string {
+	return ts.Format("2006-01-02 15:04:05.999999999")
+}
+
 func (m *Model) renderStatusHeader(cts *time.Time) string {
 	res := fmt.Sprintf("Line %s @%d ", m.cursorLine.Name(), m.cursorLine.Offset)
 	if cts != nil {
-		res += cts.String()
+		res += formatStatusTimestamp(*cts)
 	}
 	if m.lines.IsAlternateView() {
 		res = "ALT VIEW " + res

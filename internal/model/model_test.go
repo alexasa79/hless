@@ -3,6 +3,7 @@ package model
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alexasa79/hless/internal/lines"
 	"github.com/alexasa79/hless/internal/utils"
@@ -16,6 +17,21 @@ func createModel(s string, w int, h int) *Model {
 	m.ready = true
 	m.Init()
 	return m
+}
+
+func TestFormatStatusTimestampOmitsTimezone(t *testing.T) {
+	t.Parallel()
+
+	ts, err := time.Parse(time.RFC3339Nano, "2026-06-25T17:27:47.65811+00:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := formatStatusTimestamp(ts)
+	want := "2026-06-25 17:27:47.65811"
+	if got != want {
+		t.Fatalf("formatStatusTimestamp() = %q, want %q", got, want)
+	}
 }
 
 func (m *Model) verifyState(t *testing.T, line int64, segment int, cursor int64) {
