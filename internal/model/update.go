@@ -229,6 +229,8 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 
 	viewCommand := m.viewCommand
 	m.viewCommand = false
+	zeroCommand := m.zeroCommand
+	m.zeroCommand = false
 
 	if k == "q" || k == "ctrl+c" {
 		if k == "ctrl+c" && m.inProgress {
@@ -239,6 +241,17 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 			cmds = append(cmds, tea.Quit)
 			return cmds
 		}
+	}
+
+	if zeroCommand {
+		if k == "s" {
+			m.showRelativeTimestamp()
+		} else if k == "h" {
+			m.hideRelativeTimestamp()
+		} else if k == "0" {
+			m.gotoRelativeTimestampZero()
+		}
+		return cmds
 	}
 
 	if k == "esc" && m.inProgress {
@@ -471,6 +484,10 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 
 	if k == "i" {
 		m.inventoryActive = true
+	}
+
+	if k == "0" {
+		m.zeroCommand = true
 	}
 
 	return cmds

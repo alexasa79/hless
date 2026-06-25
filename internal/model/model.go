@@ -76,6 +76,14 @@ type Cegment struct {
 	style       []*lipgloss.Style
 }
 
+type RenderLine struct {
+	raw          string
+	text         string
+	timestamp    *time.Time
+	insertAt     int
+	insertedText string
+}
+
 type MarkLine struct {
 	line  *lines.Line
 	style int
@@ -103,6 +111,7 @@ type Model struct {
 	cursorStyle      lipgloss.Style
 	errorStyle       lipgloss.Style
 	statusStyle      lipgloss.Style
+	metadataStyle    lipgloss.Style
 	promptStyle      lipgloss.Style
 	editorStyle      lipgloss.Style
 	markStyle        [5]lipgloss.Style
@@ -150,6 +159,12 @@ type Model struct {
 
 	viewCommand bool
 
+	zeroCommand                bool
+	relativeTimestampActive    bool
+	relativeTimestampBase      time.Time
+	relativeTimestampLine      *lines.Line
+	relativeTimestampPrecision int
+
 	activeShowTextbox bool
 	showPattern       string
 
@@ -158,6 +173,8 @@ type Model struct {
 
 	inventoryActive   bool
 	inventoryViewport viewport.Model
+
+	renderedCursorTimestamp *time.Time
 }
 
 var ML *hhlog.Logger = hhlog.NewLogger("MODEL")
@@ -239,6 +256,8 @@ func InitialModel(b *lines.Buffer, gitrev string, buildTime string) *Model {
 		statusStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#eeeeee")).
 			Foreground(lipgloss.Color("#000000")),
+		metadataStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#777777")),
 		editorStyle: lipgloss.NewStyle().
 			Background(lipgloss.Color("#444444")).
 			Foreground(lipgloss.Color("#ffffff")),
@@ -1016,10 +1035,101 @@ func (m *Model) prevMark() {
 	}
 }
 
+func (m *Model) showRelativeTimestamp() {
+	if m.cursorLine == nil {
+		return
+	}
+
+	ts, _, precision := utils.ExtractTimestampPrefixPrecision(m.lines.Text(m.cursorLine))
+	if ts == nil {
+		m.setError("Current line has no readable timestamp")
+		return
+	}
+
+	m.relativeTimestampBase = *ts
+	m.relativeTimestampLine = m.cursorLine
+	m.relativeTimestampPrecision = precision
+	m.relativeTimestampActive = true
+}
+
+func (m *Model) hideRelativeTimestamp() {
+	m.relativeTimestampActive = false
+	m.relativeTimestampLine = nil
+}
+
+func (m *Model) gotoRelativeTimestampZero() {
+	if !m.relativeTimestampActive || m.relativeTimestampLine == nil {
+		m.setError("Relative timestamp is not active")
+		return
+	}
+	m.cursorLine = m.relativeTimestampLine
+	m.centerCursor()
+}
+
+func formatRelativeTimestamp(delta time.Duration, precision int) string {
+	sign := "+"
+	if delta < 0 {
+		sign = "-"
+		delta = -delta
+	}
+	seconds := delta / time.Second
+	nanos := delta % time.Second
+	if precision <= 0 {
+		return fmt.Sprintf("%s%d", sign, seconds)
+	}
+	if precision > 9 {
+		precision = 9
+	}
+
+	divisor := int64(1)
+	for i := precision; i < 9; i++ {
+		divisor *= 10
+	}
+
+	return fmt.Sprintf("%s%d.%0*d", sign, seconds, precision, int64(nanos)/divisor)
+}
+
+func (m *Model) renderLine(raw string, ts *time.Time, timestampEnd int) RenderLine {
+	res := RenderLine{
+		raw:       raw,
+		text:      raw,
+		timestamp: ts,
+	}
+
+	if !m.relativeTimestampActive || ts == nil {
+		return res
+	}
+
+	res.insertAt = timestampEnd
+	res.insertedText = " " + formatRelativeTimestamp(ts.Sub(m.relativeTimestampBase), m.relativeTimestampPrecision)
+	res.text = raw[:timestampEnd] + res.insertedText + raw[timestampEnd:]
+	return res
+}
+
+func (rl RenderLine) displayRange(r SearchResult) SearchResult {
+	if rl.insertedText == "" {
+		return r
+	}
+
+	insertLen := len(rl.insertedText)
+	if r.end <= rl.insertAt {
+		return r
+	}
+	if r.start >= rl.insertAt {
+		return SearchResult{start: r.start + insertLen, end: r.end + insertLen}
+	}
+	return SearchResult{start: r.start, end: r.end + insertLen}
+}
+
+func (m *Model) relativeTimestampStyle(baseStyle *lipgloss.Style) lipgloss.Style {
+	style := baseStyle.Copy()
+	style.Foreground(lipgloss.Color("#777777"))
+	return style
+}
+
 // Convert argument line string into list of segments, at most m.width in length.
 // Fill specifies if the function should fill the last segment to the m.width.
-func (m *Model) segmentize(l *lines.Line, fill bool) []string {
-	line := m.lines.Text(l)
+func (m *Model) segmentizeText(line string, fill bool) []string {
 	res := make([]string, 0)
 	if line == "" {
 		seg := fmt.Sprintf("%-*s", m.width, " ")
@@ -1038,17 +1148,34 @@ func (m *Model) segmentize(l *lines.Line, fill bool) []string {
 	return res
 }
 
+func (m *Model) segmentize(l *lines.Line, fill bool) []string {
+	raw := m.lines.Text(l)
+	if !m.relativeTimestampActive {
+		return m.segmentizeText(raw, fill)
+	}
+	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
+	return m.segmentizeText(m.renderLine(raw, ts, timestampEnd).text, fill)
+}
+
 // Break the line into segments, at most m.width long. Color the segments, using [boldStart, boldEnd)
 // as well as m.searches.
-func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style, fill bool) []Cegment {
-	segs := m.segmentize(l, fill)
+func (m *Model) cegmentizeRendered(rl RenderLine, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style, fill bool) []Cegment {
+	segs := m.segmentizeText(rl.text, fill)
 	r0 := make([]utils.Range, 0)
 
-	line := m.lines.Text(l)
 	start := 0
 	for _, seg := range segs {
 		r0 = append(r0, CegmentRange{start: start, end: start + len(seg), style: baseStyle})
 		start += len(seg)
+	}
+
+	if rl.insertedText != "" {
+		metadataStyle := m.relativeTimestampStyle(baseStyle)
+		r0 = utils.ApplyColor(r0, CegmentRange{
+			start: rl.insertAt,
+			end:   rl.insertAt + len(rl.insertedText),
+			style: &metadataStyle,
+		})
 	}
 
 	ML.Trace("Initial set of segments: %+v", r0)
@@ -1063,19 +1190,21 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 			continue
 		}
 
-		matches := m.searchMatches(line, m.searches[i].pattern, m.searches[i].regex)
+		matches := m.searchMatches(rl.raw, m.searches[i].pattern, m.searches[i].regex)
 		if len(matches) == 0 {
 			continue
 		}
 
 		for _, match := range matches {
+			match = rl.displayRange(match)
 			c := CegmentRange{start: match.start, end: match.end, style: &style}
 			r0 = utils.ApplyColor(r0, c)
 		}
 	}
 
 	if boldStart != -1 {
-		boldCeg := CegmentRange{start: boldStart, end: boldEnd, style: boldStyle}
+		boldRange := rl.displayRange(SearchResult{start: boldStart, end: boldEnd})
+		boldCeg := CegmentRange{start: boldRange.start, end: boldRange.end, style: boldStyle}
 		ML.Trace("Applying bold range %+v to %+v", boldCeg, r0)
 		r0 = utils.ApplyColor(r0, boldCeg)
 	}
@@ -1105,6 +1234,15 @@ func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart i
 	}
 
 	return res
+}
+
+func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style, fill bool) []Cegment {
+	raw := m.lines.Text(l)
+	if !m.relativeTimestampActive {
+		return m.cegmentizeRendered(RenderLine{raw: raw, text: raw}, baseStyle, boldStart, boldEnd, boldStyle, fill)
+	}
+	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
+	return m.cegmentizeRendered(m.renderLine(raw, ts, timestampEnd), baseStyle, boldStart, boldEnd, boldStyle, fill)
 }
 
 func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {

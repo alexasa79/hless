@@ -68,13 +68,13 @@ func Check(err error) {
 	}
 }
 
-func ExtractTimestamp(input string) *time.Time {
+func ExtractTimestampPrefixPrecision(input string) (*time.Time, int, int) {
 	regex := `^(\d{4}-\d{2}-\d{2})[T ](\d{2}[-:]\d{2}[-:]\d{2}(?:\.\d+)?)(Z|[+-]\d{2}:?\d{2})?.*`
 	r := regexp.MustCompile(regex)
 
 	matches := r.FindStringSubmatch(input)
 	if matches == nil || len(matches) != 4 {
-		return nil
+		return nil, 0, 0
 	}
 
 	ts := matches[1] + "T" + strings.ReplaceAll(matches[2], "-", ":")
@@ -93,7 +93,22 @@ func ExtractTimestamp(input string) *time.Time {
 		UL.Warning("Error parsing %s: %v", ts, err)
 	}
 
-	return &res
+	precision := 0
+	if dot := strings.Index(matches[2], "."); dot != -1 {
+		precision = len(matches[2]) - dot - 1
+	}
+
+	return &res, len(matches[1]) + 1 + len(matches[2]) + len(matches[3]), precision
+}
+
+func ExtractTimestampPrefix(input string) (*time.Time, int) {
+	res, end, _ := ExtractTimestampPrefixPrecision(input)
+	return res, end
+}
+
+func ExtractTimestamp(input string) *time.Time {
+	res, _ := ExtractTimestampPrefix(input)
+	return res
 }
 
 type Word struct {

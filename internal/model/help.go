@@ -71,6 +71,15 @@ func (m *Model) renderHelp() string {
  v     - Toggle between showing everything and the alternate view.
  Space - Add current line to the alternate view.
 
+ ` + m.textHeader2Style.Render("## Zero timestamp") + `
+
+ Relative timestamp display is available through the '0' keyboard shortcut.
+ To enter one of the shortcuts below, first press '0' and then the shortcut.
+
+ s - Show relative timestamps using the current line as zero.
+ h - Hide relative timestamps.
+ 0 - Go to the zero timestamp line.
+
 
 `
 }

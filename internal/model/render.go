@@ -218,7 +218,22 @@ func (m *Model) renderStatusBar() string {
 		return m.statusStyle.Render(res)
 	}
 
-	cts := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
+	if m.zeroCommand {
+		st1 := " ZERO timestamp options"
+		res := m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, st1))
+
+		res += "\n"
+
+		st2 := " s - show relative timestamps, h - hide, 0 - go to zero line"
+		res += m.statusStyle.Render(fmt.Sprintf("%-*s", m.width, st2))
+
+		return m.statusStyle.Render(res)
+	}
+
+	cts := m.renderedCursorTimestamp
+	if cts == nil {
+		cts = utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
+	}
 
 	st1 := m.renderStatusHeader(cts)
 	marks := m.renderStatusMarks(cts)
@@ -306,6 +321,7 @@ func (m *Model) View() string {
 
 	current := m.top
 	desc := ""
+	m.renderedCursorTimestamp = nil
 
 	VL.Info("Rendering the view from line %v, cursor %v, dimensions %dx%d",
 		current, m.cursorLine, w, h)
@@ -321,16 +337,23 @@ func (m *Model) View() string {
 			break
 		}
 
+		rawLine := m.lines.Text(current.Line)
+		ts, timestampEnd := utils.ExtractTimestampPrefix(rawLine)
+		renderLine := m.renderLine(rawLine, ts, timestampEnd)
+		if current.Line == m.cursorLine {
+			m.renderedCursorTimestamp = ts
+		}
+
 		var cegs []Cegment
 		if m.cursorLine == current.Line {
-			cegs = m.cegmentize(current.Line, &m.cursorStyle, m.selectionStart, m.selectionEnd, &m.currentWordStyle, true)
+			cegs = m.cegmentizeRendered(renderLine, &m.cursorStyle, m.selectionStart, m.selectionEnd, &m.currentWordStyle, true)
 		} else {
 			mls := MarkLine{line: current.Line}
 			ml := m.marks.Get(&mls)
 			if ml != nil {
-				cegs = m.cegmentize(current.Line, &m.markStyle[(*ml).style], -1, -1, &m.currentWordStyle, true)
+				cegs = m.cegmentizeRendered(renderLine, &m.markStyle[(*ml).style], -1, -1, &m.currentWordStyle, true)
 			} else {
-				cegs = m.cegmentize(current.Line, &m.defaultStyle, -1, -1, &m.currentWordStyle, false)
+				cegs = m.cegmentizeRendered(renderLine, &m.defaultStyle, -1, -1, &m.currentWordStyle, false)
 			}
 		}
 
