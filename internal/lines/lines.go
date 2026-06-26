@@ -438,16 +438,18 @@ func (lines *Lines) SetHidePattern(pat string) {
 	lines.resetView()
 }
 
-func (lines *Lines) Refresh() {
+func (lines *Lines) Refresh() bool {
 	mx.Lock()
 	defer mx.Unlock()
 
-	lines.data.Refresh()
+	dataChanged := lines.data.Refresh()
 	if lines.data.fileSize != lines.fileSize {
 		lines.readForward()
 		lines.fileSize = lines.data.fileSize
 		lines.currentView.Reset()
+		return true
 	}
+	return dataChanged
 }
 
 func (lines *Lines) AddToView(line *Line) {

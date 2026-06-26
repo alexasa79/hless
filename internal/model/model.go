@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexasa79/hless/internal/avltree"
@@ -82,6 +83,12 @@ type RenderLine struct {
 	timestamp    *time.Time
 	insertAt     int
 	insertedText string
+}
+
+type TimestampMetadata struct {
+	timestamp    *time.Time
+	timestampEnd int
+	precision    int
 }
 
 type MarkLine struct {
@@ -175,6 +182,8 @@ type Model struct {
 	inventoryViewport viewport.Model
 
 	renderedCursorTimestamp *time.Time
+	timestampCache          map[*lines.Line]TimestampMetadata
+	timestampCacheMutex     sync.Mutex
 }
 
 var ML *hhlog.Logger = hhlog.NewLogger("MODEL")
@@ -313,6 +322,8 @@ func InitialModel(b *lines.Buffer, gitrev string, buildTime string) *Model {
 			Foreground(lipgloss.Color("#ffffff")),
 
 		inventoryViewport: viewport.New(0, 0),
+
+		timestampCache: make(map[*lines.Line]TimestampMetadata),
 	}
 
 	m.search = 0
@@ -337,8 +348,58 @@ func InitialModel(b *lines.Buffer, gitrev string, buildTime string) *Model {
 	return &m
 }
 
+func (m *Model) clearTimestampCache() {
+	m.timestampCacheMutex.Lock()
+	defer m.timestampCacheMutex.Unlock()
+
+	m.timestampCache = make(map[*lines.Line]TimestampMetadata)
+	m.renderedCursorTimestamp = nil
+}
+
+func (m *Model) timestampForLine(line *lines.Line) TimestampMetadata {
+	if line == nil {
+		return TimestampMetadata{}
+	}
+
+	return m.timestampForLineText(line, m.lines.Text(line))
+}
+
+func (m *Model) timestampForLineText(line *lines.Line, raw string) TimestampMetadata {
+	if line == nil {
+		return TimestampMetadata{}
+	}
+
+	m.timestampCacheMutex.Lock()
+	defer m.timestampCacheMutex.Unlock()
+
+	cached, ok := m.timestampCache[line]
+	if ok {
+		return cached
+	}
+
+	ts, timestampEnd, precision := utils.ExtractTimestampPrefixPrecision(raw)
+	meta := TimestampMetadata{
+		timestamp:    ts,
+		timestampEnd: timestampEnd,
+		precision:    precision,
+	}
+
+	if m.timestampCache == nil {
+		m.timestampCache = make(map[*lines.Line]TimestampMetadata)
+	}
+	m.timestampCache[line] = meta
+
+	return meta
+}
+
+func (m *Model) renderLineForLine(line *lines.Line) RenderLine {
+	raw := m.lines.Text(line)
+	meta := m.timestampForLineText(line, raw)
+	return m.renderLine(raw, meta.timestamp, meta.timestampEnd)
+}
+
 func (m *Model) hasNext(pos Position) bool {
-	segs := m.segmentize(pos.Line, false)
+	segs := m.segmentizeText(m.renderLineForLine(pos.Line).text, false)
 	if pos.Segment < len(segs)-1 {
 		return true
 	}
@@ -349,7 +410,7 @@ func (m *Model) hasNext(pos Position) bool {
 }
 
 func (m *Model) next(pos Position) Position {
-	segs := m.segmentize(pos.Line, false)
+	segs := m.segmentizeText(m.renderLineForLine(pos.Line).text, false)
 	if pos.Segment < len(segs)-1 {
 		pos.Segment++
 		return pos
@@ -381,7 +442,7 @@ func (m *Model) prev(pos Position) Position {
 	prev := m.lines.Prev(pos.Line)
 	if prev != nil {
 		pos.Line = prev
-		segs := m.segmentize(pos.Line, false)
+		segs := m.segmentizeText(m.renderLineForLine(pos.Line).text, false)
 		pos.Segment = len(segs) - 1
 		return pos
 	}
@@ -419,7 +480,7 @@ func (m *Model) onKeyUp() {
 				newTop := m.lines.Prev(m.top.Line)
 				if newTop != nil {
 					m.top.Line = newTop
-					segs := m.segmentize(m.top.Line, false)
+					segs := m.segmentizeText(m.renderLineForLine(m.top.Line).text, false)
 					m.top.Segment = len(segs) - 1
 					m.cursorLine = m.top.Line
 				}
@@ -445,7 +506,7 @@ func (m *Model) onKeyDown() {
 		}
 	} else {
 		bottomLine, bottomSegment := m.bottomLine()
-		segs := m.segmentize(bottomLine, false)
+		segs := m.segmentizeText(m.renderLineForLine(bottomLine).text, false)
 		if bottomSegment < len(segs)-1 {
 			m.scrollOneSegmentDown()
 		}
@@ -877,7 +938,7 @@ func (m *Model) gotoTimeWithProgress() tea.Cmd {
 	currentLine := m.cursorLine
 
 	return func() tea.Msg {
-		cts := utils.ExtractTimestamp(m.lines.Text(currentLine))
+		cts := m.timestampForLine(currentLine).timestamp
 		if cts != nil {
 			SL.Debug("Current time is %v", *cts)
 		}
@@ -898,7 +959,7 @@ func (m *Model) gotoTimeWithProgress() tea.Cmd {
 				SL.Debug("Goto interrupted")
 				break outer
 			default:
-				cts := utils.ExtractTimestamp(m.lines.Text(currentLine))
+				cts := m.timestampForLine(currentLine).timestamp
 				if m.gotoHow == jumpparser.JUMP_BACKWARD {
 					if cts != nil && m.gotoTime.Compare(*cts) >= 0 {
 						finished = true
@@ -964,7 +1025,7 @@ func (m *Model) normalizeView() {
 	bottomLine, _ := m.bottomLine()
 	if m.cursorLine.Offset > bottomLine.Offset {
 		ML.Info("Cursor %v appears to be after bottom line %v", m.cursorLine, bottomLine)
-		pos := Position{m.cursorLine, len(m.segmentize(m.cursorLine, false)) - 1}
+		pos := Position{m.cursorLine, len(m.segmentizeText(m.renderLineForLine(m.cursorLine).text, false)) - 1}
 		for h := m.height; m.hasPrev(pos) && h > 1; h-- {
 			pos = m.prev(pos)
 		}
@@ -974,7 +1035,7 @@ func (m *Model) normalizeView() {
 }
 
 func (m *Model) centerCursor() {
-	segs := m.segmentize(m.cursorLine, false)
+	segs := m.segmentizeText(m.renderLineForLine(m.cursorLine).text, false)
 
 	pos := Position{
 		Line:    m.cursorLine,
@@ -1040,15 +1101,15 @@ func (m *Model) showRelativeTimestamp() {
 		return
 	}
 
-	ts, _, precision := utils.ExtractTimestampPrefixPrecision(m.lines.Text(m.cursorLine))
-	if ts == nil {
+	meta := m.timestampForLine(m.cursorLine)
+	if meta.timestamp == nil {
 		m.setError("Current line has no readable timestamp")
 		return
 	}
 
-	m.relativeTimestampBase = *ts
+	m.relativeTimestampBase = *meta.timestamp
 	m.relativeTimestampLine = m.cursorLine
-	m.relativeTimestampPrecision = precision
+	m.relativeTimestampPrecision = meta.precision
 	m.relativeTimestampActive = true
 }
 
@@ -1148,15 +1209,6 @@ func (m *Model) segmentizeText(line string, fill bool) []string {
 	return res
 }
 
-func (m *Model) segmentize(l *lines.Line, fill bool) []string {
-	raw := m.lines.Text(l)
-	if !m.relativeTimestampActive {
-		return m.segmentizeText(raw, fill)
-	}
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	return m.segmentizeText(m.renderLine(raw, ts, timestampEnd).text, fill)
-}
-
 // Break the line into segments, at most m.width long. Color the segments, using [boldStart, boldEnd)
 // as well as m.searches.
 func (m *Model) cegmentizeRendered(rl RenderLine, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style, fill bool) []Cegment {
@@ -1236,15 +1288,6 @@ func (m *Model) cegmentizeRendered(rl RenderLine, baseStyle *lipgloss.Style, bol
 	return res
 }
 
-func (m *Model) cegmentize(l *lines.Line, baseStyle *lipgloss.Style, boldStart int, boldEnd int, boldStyle *lipgloss.Style, fill bool) []Cegment {
-	raw := m.lines.Text(l)
-	if !m.relativeTimestampActive {
-		return m.cegmentizeRendered(RenderLine{raw: raw, text: raw}, baseStyle, boldStart, boldEnd, boldStyle, fill)
-	}
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	return m.cegmentizeRendered(m.renderLine(raw, ts, timestampEnd), baseStyle, boldStart, boldEnd, boldStyle, fill)
-}
-
 func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 	if j.Offset != nil {
 		if *j.Offset < 0 || *j.Offset > 100 {
@@ -1285,7 +1328,7 @@ func (m *Model) jumpTo(j jumpparser.JumpLocation) tea.Cmd {
 	}
 
 	if j.MicroSeconds != nil {
-		cts := utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
+		cts := m.timestampForLine(m.cursorLine).timestamp
 		if cts != nil {
 			m.gotoTime = *cts
 			m.gotoHow = j.How

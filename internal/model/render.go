@@ -125,7 +125,7 @@ func (m *Model) renderStatusMarks(cts *time.Time) string {
 		ms := make([]string, 0)
 		if pred != nil {
 			ms = append(ms, fmt.Sprintf("↑%s", lines.Distance((*pred).line, m.cursorLine)))
-			ttt := utils.ExtractTimestamp(m.lines.Text((*pred).line))
+			ttt := m.timestampForLine((*pred).line).timestamp
 			if cts != nil && ttt != nil {
 				ms = append(ms, (*cts).Sub(*ttt).String())
 			}
@@ -135,7 +135,7 @@ func (m *Model) renderStatusMarks(cts *time.Time) string {
 		}
 		if succ != nil {
 			ms = append(ms, fmt.Sprintf("%s↓", lines.Distance((*succ).line, m.cursorLine)))
-			ttt := utils.ExtractTimestamp(m.lines.Text((*succ).line))
+			ttt := m.timestampForLine((*succ).line).timestamp
 			if cts != nil && ttt != nil {
 				ms = append(ms, (*ttt).Sub(*cts).String())
 			}
@@ -170,7 +170,7 @@ func (m *Model) renderStatusSearch(cts *time.Time) string {
 		sh := make([]string, 0)
 		if predSearchHit != nil {
 			sh = append(sh, fmt.Sprintf("↑%s", lines.Distance(*predSearchHit, m.cursorLine)))
-			ttt := utils.ExtractTimestamp(m.lines.Text(*predSearchHit))
+			ttt := m.timestampForLine(*predSearchHit).timestamp
 			if ttt != nil && cts != nil {
 				sh = append(sh, (cts.Sub(*ttt).String()))
 			}
@@ -178,7 +178,7 @@ func (m *Model) renderStatusSearch(cts *time.Time) string {
 
 		if succSearchHit != nil {
 			sh = append(sh, fmt.Sprintf("%s↓", lines.Distance(*succSearchHit, m.cursorLine)))
-			ttt := utils.ExtractTimestamp(m.lines.Text(*succSearchHit))
+			ttt := m.timestampForLine(*succSearchHit).timestamp
 			if ttt != nil && cts != nil {
 				sh = append(sh, (ttt.Sub(*cts).String()))
 			}
@@ -236,7 +236,7 @@ func (m *Model) renderStatusBar() string {
 
 	cts := m.renderedCursorTimestamp
 	if cts == nil {
-		cts = utils.ExtractTimestamp(m.lines.Text(m.cursorLine))
+		cts = m.timestampForLine(m.cursorLine).timestamp
 	}
 
 	st1 := m.renderStatusHeader(cts)
@@ -341,11 +341,9 @@ func (m *Model) View() string {
 			break
 		}
 
-		rawLine := m.lines.Text(current.Line)
-		ts, timestampEnd := utils.ExtractTimestampPrefix(rawLine)
-		renderLine := m.renderLine(rawLine, ts, timestampEnd)
+		renderLine := m.renderLineForLine(current.Line)
 		if current.Line == m.cursorLine {
-			m.renderedCursorTimestamp = ts
+			m.renderedCursorTimestamp = renderLine.timestamp
 		}
 
 		var cegs []Cegment

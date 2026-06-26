@@ -277,7 +277,9 @@ func (m *Model) UpdateMain(msg tea.Msg) []tea.Cmd {
 	}
 
 	if k == "R" {
-		m.lines.Refresh()
+		if m.lines.Refresh() {
+			m.clearTimestampCache()
+		}
 	}
 
 	if k == "pgup" {
@@ -498,7 +500,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	ML.Info("Got request %v %v", reflect.TypeOf(msg), msg)
 
-	m.lines.Refresh()
+	if m.lines.Refresh() {
+		m.clearTimestampCache()
+	}
 
 	cmds := make([]tea.Cmd, 0)
 

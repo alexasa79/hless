@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/alexasa79/hless/internal/lines"
-	"github.com/alexasa79/hless/internal/utils"
 )
 
 func createModel(s string, w int, h int) *Model {
@@ -100,9 +99,8 @@ func TestRenderLineWithRelativeTimestamp(t *testing.T) {
 	m := createModel("2026-06-25 14:37:50.721999891 0x10002\n", 200, 5)
 	m.showRelativeTimestamp()
 
-	raw := m.lines.Text(m.cursorLine)
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	rl := m.renderLine(raw, ts, timestampEnd)
+	rl := m.renderLineForLine(m.cursorLine)
+	raw := rl.raw
 
 	if !strings.Contains(rl.text, "2026-06-25 14:37:50.721999891 +0.000000000 0x10002") {
 		t.Fatalf("rendered line %q does not contain relative timestamp", rl.text)
@@ -118,9 +116,8 @@ func TestRelativeTimestampSearchRangeSpansInsertedColumn(t *testing.T) {
 	m := createModel("2026-06-25 14:37:50.721999891 0x10002\n", 200, 5)
 	m.showRelativeTimestamp()
 
-	raw := m.lines.Text(m.cursorLine)
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	rl := m.renderLine(raw, ts, timestampEnd)
+	rl := m.renderLineForLine(m.cursorLine)
+	raw := rl.raw
 
 	matchStart := strings.Index(raw, "14:37:50.721999891 0x10002")
 	if matchStart == -1 {
@@ -171,9 +168,7 @@ func TestRelativeTimestampPrecisionMatchesZeroLine(t *testing.T) {
 			m.showRelativeTimestamp()
 
 			next := m.lines.Next(m.cursorLine)
-			raw := m.lines.Text(next)
-			ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-			rl := m.renderLine(raw, ts, timestampEnd)
+			rl := m.renderLineForLine(next)
 
 			if rl.text != tt.want {
 				t.Fatalf("rendered line = %q, want %q", rl.text, tt.want)
@@ -189,9 +184,7 @@ func TestRelativeTimestampInsertedColumnUsesSearchStyle(t *testing.T) {
 	m.showRelativeTimestamp()
 	m.searches[0] = Search{pattern: "14:37:50.721999891 0x10002"}
 
-	raw := m.lines.Text(m.cursorLine)
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	rl := m.renderLine(raw, ts, timestampEnd)
+	rl := m.renderLineForLine(m.cursorLine)
 	cegs := m.cegmentizeRendered(rl, &m.defaultStyle, -1, -1, &m.currentWordStyle, false)
 
 	expectedStyle := m.searchStyles[0].Copy().Bold(true)
@@ -217,9 +210,7 @@ func TestRelativeTimestampInsertedColumnUsesMetadataStyle(t *testing.T) {
 	m := createModel("2026-06-25 14:37:50.721999891 0x10002\n", 200, 5)
 	m.showRelativeTimestamp()
 
-	raw := m.lines.Text(m.cursorLine)
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	rl := m.renderLine(raw, ts, timestampEnd)
+	rl := m.renderLineForLine(m.cursorLine)
 	cegs := m.cegmentizeRendered(rl, &m.defaultStyle, -1, -1, &m.currentWordStyle, false)
 
 	for _, ceg := range cegs {
@@ -245,9 +236,7 @@ func TestRelativeTimestampInsertedColumnUsesCursorBackground(t *testing.T) {
 	m := createModel("2026-06-25 14:37:50.721999891 0x10002\n", 200, 5)
 	m.showRelativeTimestamp()
 
-	raw := m.lines.Text(m.cursorLine)
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	rl := m.renderLine(raw, ts, timestampEnd)
+	rl := m.renderLineForLine(m.cursorLine)
 	cegs := m.cegmentizeRendered(rl, &m.cursorStyle, -1, -1, &m.currentWordStyle, true)
 
 	for _, ceg := range cegs {
@@ -273,9 +262,8 @@ func TestRelativeTimestampInsertedColumnUsesSelectionStyle(t *testing.T) {
 	m := createModel("2026-06-25 14:37:50.721999891 0x10002\n", 200, 5)
 	m.showRelativeTimestamp()
 
-	raw := m.lines.Text(m.cursorLine)
-	ts, timestampEnd := utils.ExtractTimestampPrefix(raw)
-	rl := m.renderLine(raw, ts, timestampEnd)
+	rl := m.renderLineForLine(m.cursorLine)
+	raw := rl.raw
 
 	m.selectionStart = strings.Index(raw, "14:37:50.721999891")
 	if m.selectionStart == -1 {
