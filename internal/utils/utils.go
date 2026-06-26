@@ -17,6 +17,7 @@ import (
 
 var UL = hhlog.NewLogger("UTILS")
 var assertHandlers = make([]func(), 0)
+var timestampPrefixRegex = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})[T ](\d{2}[-:]\d{2}[-:]\d{2}(?:\.\d+)?)(Z|[+-]\d{2}:?\d{2})?.*`)
 
 func Sprint64(n int64) string {
 	p := message.NewPrinter(language.English)
@@ -69,10 +70,7 @@ func Check(err error) {
 }
 
 func ExtractTimestampPrefixPrecision(input string) (*time.Time, int, int) {
-	regex := `^(\d{4}-\d{2}-\d{2})[T ](\d{2}[-:]\d{2}[-:]\d{2}(?:\.\d+)?)(Z|[+-]\d{2}:?\d{2})?.*`
-	r := regexp.MustCompile(regex)
-
-	matches := r.FindStringSubmatch(input)
+	matches := timestampPrefixRegex.FindStringSubmatch(input)
 	if matches == nil || len(matches) != 4 {
 		return nil, 0, 0
 	}
