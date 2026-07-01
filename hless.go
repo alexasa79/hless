@@ -11,6 +11,7 @@ import (
 	"github.com/alexasa79/hless/internal/model"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fred1268/go-clap/clap"
+	"github.com/muesli/termenv"
 
 	_ "net/http/pprof"
 )
@@ -131,7 +132,15 @@ func main() {
 		defer buffer.Close()
 	}
 
-	p := tea.NewProgram(model.InitialModel(buffer, gitrev, buildTime), tea.WithAltScreen(), tea.WithInput(stdin))
+	// Build the output explicitly so Bubble Tea does not wrap stdout with
+	// termenv.WithColorCache, which probes the terminal ("\e]11;?" + "\e[6n")
+	// and blocks on the cursor-position reply. Under rlwrap that reply is eaten
+	// by its line-editing layer, so the probe never returns and hless hangs at
+	// startup with a blank screen. We already force the profile in the model
+	// (lipgloss.SetColorProfile), so no detection is needed here.
+	output := termenv.NewOutput(os.Stdout, termenv.WithProfile(termenv.TrueColor))
+
+	p := tea.NewProgram(model.InitialModel(buffer, gitrev, buildTime), tea.WithAltScreen(), tea.WithInput(stdin), tea.WithOutput(output))
 	defer tea.ExitAltScreen()
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error rendering the TUI: %v", err)
