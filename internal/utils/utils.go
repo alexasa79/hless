@@ -121,7 +121,7 @@ func SplitWords(s string) []Word {
 	prev := true
 	counter := 0
 	fields := strings.FieldsFunc(s, func(r rune) bool {
-		delim := unicode.IsSpace(r) || unicode.IsPunct(r)
+		delim := unicode.IsSpace(r) || unicode.IsPunct(r) || r == '='
 		if !delim && prev {
 			words = append(words, Word{
 				Start: counter,

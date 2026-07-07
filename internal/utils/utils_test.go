@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -103,5 +104,19 @@ func TestExtractTimestampNoMatch(t *testing.T) {
 
 	if got := ExtractTimestamp("not a timestamp"); got != nil {
 		t.Fatalf("ExtractTimestamp returned %s, want nil", got.Format(time.RFC3339Nano))
+	}
+}
+
+func TestSplitWordsTreatsEqualsAsDelimiter(t *testing.T) {
+	t.Parallel()
+
+	got := SplitWords("rid=0x1243")
+	want := []Word{
+		{Word: "rid", Start: 0, End: 3},
+		{Word: "0x1243", Start: 4, End: 10},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("SplitWords() = %#v, want %#v", got, want)
 	}
 }
