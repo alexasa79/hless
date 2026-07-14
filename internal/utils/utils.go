@@ -70,9 +70,23 @@ func Check(err error) {
 }
 
 func ExtractTimestampPrefixPrecision(input string) (*time.Time, int, int) {
-	matches := timestampPrefixRegex.FindStringSubmatch(input)
+	timestampStart := 0
+	bracketed := strings.HasPrefix(input, "[")
+	if bracketed {
+		timestampStart++
+	}
+
+	matches := timestampPrefixRegex.FindStringSubmatch(input[timestampStart:])
 	if matches == nil || len(matches) != 4 {
 		return nil, 0, 0
+	}
+
+	timestampEnd := timestampStart + len(matches[1]) + 1 + len(matches[2]) + len(matches[3])
+	if bracketed {
+		if timestampEnd >= len(input) || input[timestampEnd] != ']' {
+			return nil, 0, 0
+		}
+		timestampEnd++
 	}
 
 	ts := matches[1] + "T" + strings.ReplaceAll(matches[2], "-", ":")
@@ -96,7 +110,7 @@ func ExtractTimestampPrefixPrecision(input string) (*time.Time, int, int) {
 		precision = len(matches[2]) - dot - 1
 	}
 
-	return &res, len(matches[1]) + 1 + len(matches[2]) + len(matches[3]), precision
+	return &res, timestampEnd, precision
 }
 
 func ExtractTimestampPrefix(input string) (*time.Time, int) {

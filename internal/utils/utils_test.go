@@ -59,6 +59,13 @@ func TestExtractTimestamp(t *testing.T) {
 			wantPrecision: 9,
 		},
 		{
+			name:          "bracketed zulu timestamp",
+			input:         "[2026-07-14T13:31:57Z] message",
+			want:          "2026-07-14T13:31:57Z",
+			wantEnd:       len("[2026-07-14T13:31:57Z]"),
+			wantPrecision: 0,
+		},
+		{
 			name:          "colon timezone",
 			input:         "2026-06-22T18:22:39.586770174+03:30 message",
 			want:          "2026-06-22T18:22:39.586770174+03:30",
