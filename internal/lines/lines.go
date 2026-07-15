@@ -212,7 +212,6 @@ func (lines *Lines) Next(line *Line) (next *Line) {
 
 	next = lines.currentView.NextOf(line)
 	if next != nil {
-		utils.Assert(lines.visible(next), next)
 		return next
 	}
 
