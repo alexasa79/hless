@@ -2,11 +2,56 @@ package lines
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/alexasa79/hless/internal/utils"
 )
+
+func TestNewBufferFromEmptyFile(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "empty")
+	if err := os.WriteFile(filename, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	buf := NewBufferFromFile(filename)
+
+	if got := buf.Size(); got != 0 {
+		t.Fatalf("Size() = %d, want 0", got)
+	}
+	if got := buf.Range(0, 0); len(got) != 0 {
+		t.Fatalf("Range(0, 0) returned %d bytes, want 0", len(got))
+	}
+}
+
+func TestFileBufferRefreshesBetweenEmptyAndNonEmpty(t *testing.T) {
+	filename := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(filename, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	buf := NewBufferFromFile(filename)
+
+	if err := os.WriteFile(filename, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if changed := buf.Refresh(); !changed {
+		t.Fatal("Refresh() = false after file became non-empty")
+	}
+	if got := string(buf.Range(0, buf.Size())); got != "hello" {
+		t.Fatalf("buffer contents = %q, want %q", got, "hello")
+	}
+
+	if err := os.WriteFile(filename, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if changed := buf.Refresh(); !changed {
+		t.Fatal("Refresh() = false after file became empty")
+	}
+	if got := buf.Size(); got != 0 {
+		t.Fatalf("Size() = %d, want 0", got)
+	}
+}
 
 func TestReadFileDoesNotHoldBufferLockWhileRefreshChannelIsFull(t *testing.T) {
 	t.Parallel()

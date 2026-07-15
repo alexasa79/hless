@@ -47,9 +47,12 @@ func NewBufferFromFile(filename string) *Buffer {
 
 	LL.Debug("Memory mapping %d bytes long file %s, file descriptor %d", fileSize, filename, f.Fd())
 
-	data, err := syscall.Mmap(int(f.Fd()), 0, int(fileSize), syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil {
-		panic(err)
+	var data []byte
+	if fileSize > 0 {
+		data, err = syscall.Mmap(int(f.Fd()), 0, int(fileSize), syscall.PROT_READ, syscall.MAP_SHARED)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	return &Buffer{
@@ -201,14 +204,19 @@ func (b *Buffer) Refresh() bool {
 		if fileSize != b.fileSize {
 			LL.Debug("File's size changed from %d to %d. Remapping", b.fileSize, fileSize)
 
-			syscall.Munmap(b.bytes)
-
-			data, err := syscall.Mmap(int(f.Fd()), 0, int(fileSize), syscall.PROT_READ, syscall.MAP_SHARED)
-			if err != nil {
-				panic(err)
+			if len(b.bytes) > 0 {
+				if err := syscall.Munmap(b.bytes); err != nil {
+					panic(err)
+				}
 			}
 
-			utils.Assert(err == nil, err)
+			var data []byte
+			if fileSize > 0 {
+				data, err = syscall.Mmap(int(f.Fd()), 0, int(fileSize), syscall.PROT_READ, syscall.MAP_SHARED)
+				if err != nil {
+					panic(err)
+				}
+			}
 
 			b.fileSize = fileSize
 			b.bytes = data
