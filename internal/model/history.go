@@ -88,10 +88,7 @@ func (h *History) Save() {
 }
 
 func (h *History) Append(s string) {
-	if len(h.History) > 0 && h.History[len(h.History)-1] != s {
-		// Do not append same string twice
-		h.History = append(h.History, s)
-	}
+	h.History = append(h.History, s)
 	h.cursor = len(h.History)
 }
 
