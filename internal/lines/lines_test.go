@@ -2,11 +2,41 @@ package lines
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alexasa79/hless/internal/hhlog"
 	"github.com/alexasa79/hless/internal/utils"
 )
+
+func TestFastFindSkipsHiddenMatches(t *testing.T) {
+	lines := NewLines(NewBufferFromString("hidden needle\nvisible needle\nhidden needle\n"))
+	lines.First()
+	lines.SetShowPattern("^visible")
+	lines.SetAlternateView()
+
+	find := func(first bool) func([]byte, int64) (int64, bool) {
+		return func(data []byte, offset int64) (int64, bool) {
+			var index int
+			if first {
+				index = strings.Index(string(data), "needle")
+			} else {
+				index = strings.LastIndex(string(data), "needle")
+			}
+			return offset + int64(index), index >= 0
+		}
+	}
+
+	forward := lines.FastFind(0, lines.data.Size(), true, find(true))
+	if forward == nil || lines.Text(forward) != "visible needle" {
+		t.Fatalf("forward FastFind() = %v, want visible line", forward)
+	}
+
+	backward := lines.FastFind(0, lines.data.Size(), false, find(false))
+	if backward == nil || lines.Text(backward) != "visible needle" {
+		t.Fatalf("backward FastFind() = %v, want visible line", backward)
+	}
+}
 
 func checkLine(lines *Lines, line *Line, offset int64, length int64, rawLength int64) {
 	utils.Assert(line != nil)

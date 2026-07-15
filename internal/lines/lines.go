@@ -470,7 +470,8 @@ func (lines *Lines) IsAlternateView() bool {
 func (lines *Lines) FastFind(
 	from int64,
 	to int64,
-	what func(data []byte) (int64, bool),
+	forward bool,
+	what func(data []byte, offset int64) (int64, bool),
 ) *Line {
 	mx.Lock()
 	defer mx.Unlock()
@@ -487,7 +488,18 @@ func (lines *Lines) FastFind(
 			if lines.visible(res) {
 				break
 			}
+
+			if forward {
+				from = res.Offset + lines.RawLength(res)
+			} else {
+				to = res.Offset
+			}
+			if from >= to {
+				res = nil
+				break
+			}
 		} else {
+			res = nil
 			break
 		}
 	}

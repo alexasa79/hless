@@ -64,9 +64,9 @@ func (m *Model) findNextWithProgress(search int) tea.Cmd {
 		batchSize := int64(10485760) // 10 MiB
 		to := utils.Min(currentOffset+batchSize, m.buffer.Size())
 		SL.Trace("Calling FastFind for range [%d, %d)", currentOffset-shift, to)
-		searchLine = m.lines.FastFind(currentOffset-shift, to,
-			func(data []byte) (int64, bool) {
-				return m.findFastInner(data, search, currentOffset-shift, true)
+		searchLine = m.lines.FastFind(currentOffset-shift, to, true,
+			func(data []byte, offset int64) (int64, bool) {
+				return m.findFastInner(data, search, offset, true)
 			})
 
 		select {
@@ -131,9 +131,9 @@ func (m *Model) findPrevWithProgress(search int) tea.Cmd {
 		batchSize := int64(10485760) // 10 MiB
 		from := utils.Max(0, currentOffset-batchSize)
 		SL.Trace("Calling FastFind for range [%d, %d)", from, currentOffset+shift)
-		searchLine = m.lines.FastFind(from, currentOffset+shift,
-			func(data []byte) (int64, bool) {
-				return m.findFastInner(data, search, from, false)
+		searchLine = m.lines.FastFind(from, currentOffset+shift, false,
+			func(data []byte, offset int64) (int64, bool) {
+				return m.findFastInner(data, search, offset, false)
 			})
 
 		select {

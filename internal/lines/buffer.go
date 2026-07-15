@@ -235,7 +235,7 @@ func (b *Buffer) Refresh() bool {
 func (b *Buffer) FastFind(
 	from int64,
 	to int64,
-	what func(data []byte) (int64, bool),
+	what func(data []byte, offset int64) (int64, bool),
 ) (
 	int64,
 	bool,
@@ -245,5 +245,5 @@ func (b *Buffer) FastFind(
 
 	utils.Assert(to <= int64(len(b.bytes)), "to %d, buffer length %d", to, len(b.bytes))
 
-	return what(b.bytes[from:to])
+	return what(b.bytes[from:to], from)
 }
