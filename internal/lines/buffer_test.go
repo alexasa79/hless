@@ -3,6 +3,7 @@ package lines
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +51,26 @@ func TestFileBufferRefreshesBetweenEmptyAndNonEmpty(t *testing.T) {
 	}
 	if got := buf.Size(); got != 0 {
 		t.Fatalf("Size() = %d, want 0", got)
+	}
+}
+
+func TestBufferExtractsLongAndUnterminatedLines(t *testing.T) {
+	long := strings.Repeat("x", 512*1024)
+	buf := NewBufferFromString(long + "\nshort\nunterminated")
+
+	if got := buf.lineText(0); got != long {
+		t.Fatalf("lineText(0) returned %d bytes, want %d", len(got), len(long))
+	}
+	if length, rawLength := buf.lineLengths(0); length != int64(len(long)) || rawLength != int64(len(long)+1) {
+		t.Fatalf("lineLengths(0) = (%d, %d), want (%d, %d)", length, rawLength, len(long), len(long)+1)
+	}
+
+	unterminatedOffset := int64(len(long) + len("\nshort\n"))
+	if got := buf.lineText(unterminatedOffset); got != "unterminated" {
+		t.Fatalf("lineText(%d) = %q, want %q", unterminatedOffset, got, "unterminated")
+	}
+	if length, rawLength := buf.lineLengths(unterminatedOffset); length != 12 || rawLength != 12 {
+		t.Fatalf("lineLengths(%d) = (%d, %d), want (12, 12)", unterminatedOffset, length, rawLength)
 	}
 }
 

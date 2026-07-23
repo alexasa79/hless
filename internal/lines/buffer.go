@@ -1,6 +1,7 @@
 package lines
 
 import (
+	"bytes"
 	"os"
 	"sync"
 	"syscall"
@@ -178,6 +179,37 @@ func (b *Buffer) Range(start, end int64) []byte {
 	defer b.mx.Unlock()
 
 	return b.bytes[start:end]
+}
+
+// lineBounds returns the end of the line's text and the end of its raw data,
+// including a trailing newline when present. The caller must hold b.mx.
+func (b *Buffer) lineBounds(start int64) (int64, int64) {
+	utils.Assert(start >= 0 && start <= int64(len(b.bytes)), start, len(b.bytes))
+
+	newline := bytes.IndexByte(b.bytes[start:], '\n')
+	if newline < 0 {
+		end := int64(len(b.bytes))
+		return end, end
+	}
+
+	end := start + int64(newline)
+	return end, end + 1
+}
+
+func (b *Buffer) lineText(start int64) string {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+
+	end, _ := b.lineBounds(start)
+	return string(b.bytes[start:end])
+}
+
+func (b *Buffer) lineLengths(start int64) (int64, int64) {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+
+	end, rawEnd := b.lineBounds(start)
+	return end - start, rawEnd - start
 }
 
 func (b *Buffer) Refresh() bool {

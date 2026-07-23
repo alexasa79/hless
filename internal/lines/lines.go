@@ -340,16 +340,7 @@ func (lines *Lines) text(line *Line) string {
 		return ""
 	}
 
-	res := ""
-	size := lines.data.Size()
-	for pos := line.Offset; pos < size; pos++ {
-		c := lines.data.At(pos)
-		if c == '\n' {
-			break
-		}
-		res += string(c)
-	}
-	return res
+	return lines.data.lineText(line.Offset)
 }
 
 func (lines *Lines) Text(line *Line) string {
@@ -360,28 +351,13 @@ func (lines *Lines) Text(line *Line) string {
 }
 
 func (lines *Lines) Length(line *Line) int64 {
-	res := int64(0)
-	size := lines.data.Size()
-	for line.Offset+res < size {
-		if lines.data.At(line.Offset+res) == '\n' {
-			break
-		}
-		res++
-	}
-	return res
+	length, _ := lines.data.lineLengths(line.Offset)
+	return length
 }
 
 func (lines *Lines) RawLength(line *Line) int64 {
-	res := int64(0)
-	size := lines.data.Size()
-	for line.Offset+res < size {
-		if lines.data.At(line.Offset+res) == '\n' {
-			res += 1
-			break
-		}
-		res++
-	}
-	return res
+	_, rawLength := lines.data.lineLengths(line.Offset)
+	return rawLength
 }
 
 func (lines *Lines) resetView() {
